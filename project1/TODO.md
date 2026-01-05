@@ -1,0 +1,5 @@
+- write tests
+- reduce code duplication handle set/get/delete/incr within and between server/client 
+- layer / split sockets from store ops from user interaction
+- extract socket code to lib
+- find alternative to fixed 1KB buffer (could be fine)

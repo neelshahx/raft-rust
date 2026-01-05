@@ -2,7 +2,6 @@ use std::ascii::AsciiExt;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-// TODO: replace with RPC
 fn handle_get(key: &str, stream: &mut TcpStream) -> String {
     stream.write_all(format!("get {}", key).as_bytes());
     let mut stream2 = stream.try_clone().unwrap();

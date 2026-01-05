@@ -17,7 +17,7 @@ fn handle_client(stream: &mut TcpStream) -> std::io::Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    let data = KVStore::new();
+    let data = KVStore::new(); //guard with mutex p367-374
 
     let socket = Socket::new(Domain::IPV4, Type::STREAM, None)?;
     socket.set_reuse_address(true)?;
