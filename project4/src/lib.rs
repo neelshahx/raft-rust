@@ -209,7 +209,7 @@ mod tests {
         // Test multiple append_entries calls in sequence
         let mut log = RaftLog::new();
 
-        // First append
+        // First append (assume RPC sends prev index = 0, prev term = 0)
         let entries1 = vec![LogEntry::new(1, "cmd1".to_string())];
         assert!(log.append_entries(0, 0, entries1));
         assert_eq!(log.log.len(), 2);
