@@ -1,5 +1,13 @@
 use std::collections::HashMap;
 
+pub const SERVERS : [(u8, &str); 5] = [
+    (0, "127.0.0.1:20000"),
+    (1, "127.0.0.1:21000"),
+    (2, "127.0.0.1:22000"),
+    (3, "127.0.0.1:23000"),
+    (4, "127.0.0.1:24000")
+];
+
 pub struct KVStore {
     data: HashMap<String, String>,
 }

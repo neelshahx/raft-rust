@@ -1,11 +1,14 @@
 use project3::KVStore;
+use project3::SERVERS;
+use std::error::Error;
 use socket2::{Domain, SockRef, Socket, TcpKeepalive, Type};
-use std::io::{Read, Result, Write};
+use std::env;
+use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-fn update_store(input: String, store: &mut KVStore) -> Result<String> {
+fn update_store(input: String, store: &mut KVStore) -> std::io::Result<String> {
     let parts: Vec<&str> = input.trim().split_whitespace().collect();
     let response = match parts.as_slice() {
         ["get", key] if key.is_ascii() => store.get(*key).unwrap_or("Not found".to_string()),
@@ -33,7 +36,7 @@ fn update_store(input: String, store: &mut KVStore) -> Result<String> {
     Ok(response)
 }
 
-fn handle_client(stream: &mut TcpStream, data: Arc<Mutex<KVStore>>) -> Result<String> {
+fn handle_client(stream: &mut TcpStream, data: Arc<Mutex<KVStore>>) -> std::io::Result<String> {
     loop {
         let mut buf = [0u8; 1024];
         let n = stream.read(&mut buf)?;
@@ -50,14 +53,26 @@ fn handle_client(stream: &mut TcpStream, data: Arc<Mutex<KVStore>>) -> Result<St
     Ok("Invalid input".to_string())
 }
 
-fn main() -> Result<()> {
+fn main() -> std::result::Result<(), Box<dyn Error>> {
+    let n: u8 = env::args()
+        .nth(1)
+        .expect("Missing argument server number [0-4]")
+        .parse()
+        .unwrap();
+
+    if n > 4 {
+        return Err("n must be between 0 and 4".to_string().into());
+    }
+
     let data = Arc::new(Mutex::new(KVStore::new()));
 
     let socket = Socket::new(Domain::IPV4, Type::STREAM, None)?;
     socket.set_reuse_address(true)?;
     socket.set_tcp_nodelay(true)?;
 
-    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    let ip_port = SERVERS[usize::from(n)].1;
+    println!("Listening on {}", ip_port);
+    let addr: SocketAddr = ip_port.parse().unwrap();
     socket.bind(&addr.into())?;
     socket.listen(128)?;
 

@@ -3,9 +3,6 @@ name = "project2"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-socket2 = "0.6.1"
-
 [[bin]]
 name = "proj2_controller"
 path = "bin/controller.rs"
