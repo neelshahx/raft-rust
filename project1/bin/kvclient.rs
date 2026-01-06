@@ -1,15 +1,14 @@
-use socket2::{Socket, TcpKeepalive};
+use socket2::{SockRef, TcpKeepalive};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
 fn main() -> std::io::Result<()> {
-    let stream = TcpStream::connect("127.0.0.1:8080")?;
+    let mut stream = TcpStream::connect("127.0.0.1:8080")?;
     stream.set_nodelay(true)?;
-    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    let socket = Socket::from(stream);
-    let mut stream: TcpStream = socket.into();
+    let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(60));
+    SockRef::from(&stream).set_tcp_keepalive(&keepalive)?;
 
     loop {
         print!("KV>");
