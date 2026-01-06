@@ -6,7 +6,7 @@ pub const APP_SERVERS: [(u8, &str); 5] = [
     (5, "127.0.0.1:24000"),
 ];
 
-pub const RAFTNET_ADDRS: [(u8, &str); 5] = [
+pub const RAFT_SERVERS: [(u8, &str); 5] = [
     (1, "127.0.0.1:10000"),
     (2, "127.0.0.1:11000"),
     (3, "127.0.0.1:12000"),
