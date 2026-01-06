@@ -1,4 +1,4 @@
-use project3::SERVERS;
+use project3::config::APP_SERVERS;
 use socket2::{SockRef, TcpKeepalive};
 use std::env;
 use std::error::Error;
@@ -9,15 +9,15 @@ use std::time::Duration;
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let n: u8 = env::args()
         .nth(1)
-        .expect("Missing argument server number [0-4]")
+        .expect("Missing argument server number [1-5]")
         .parse()
         .unwrap();
 
-    if n > 4 {
+    if n == 0 || n > 5 {
         return Err("n must be between 0 and 4".to_string().into());
     }
 
-    let ip_port = SERVERS[usize::from(n)].1;
+    let ip_port = APP_SERVERS[usize::from(n)].1;
     println!("Connecting to {}", ip_port);
     let mut stream = TcpStream::connect(ip_port)?;
     stream.set_nodelay(true)?;

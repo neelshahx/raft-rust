@@ -1,8 +1,8 @@
-use project3::KVStore;
-use project3::SERVERS;
-use std::error::Error;
+use project3::config::APP_SERVERS;
+use project3::kvstore::KVStore;
 use socket2::{Domain, SockRef, Socket, TcpKeepalive, Type};
 use std::env;
+use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -53,14 +53,14 @@ fn handle_client(stream: &mut TcpStream, data: Arc<Mutex<KVStore>>) -> std::io::
     Ok("Invalid input".to_string())
 }
 
-fn main() -> std::result::Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let n: u8 = env::args()
         .nth(1)
-        .expect("Missing argument server number [0-4]")
+        .expect("Missing argument server number [1-5]")
         .parse()
         .unwrap();
 
-    if n > 4 {
+    if n == 0 || n > 5 {
         return Err("n must be between 0 and 4".to_string().into());
     }
 
@@ -70,7 +70,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     socket.set_reuse_address(true)?;
     socket.set_tcp_nodelay(true)?;
 
-    let ip_port = SERVERS[usize::from(n)].1;
+    let ip_port = APP_SERVERS[usize::from(n)].1;
     println!("Listening on {}", ip_port);
     let addr: SocketAddr = ip_port.parse().unwrap();
     socket.bind(&addr.into())?;
