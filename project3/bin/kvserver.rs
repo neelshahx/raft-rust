@@ -67,8 +67,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // RAFT SERVER
 
     std::thread::spawn(move || RaftServer::new(my_server_id).launch());
- 
+
     // APP SERVER
+
+    // TODO: move to AppServer.rs with handle_client, update_store, and tests
 
     let data = Arc::new(Mutex::new(KVStore::new()));
 

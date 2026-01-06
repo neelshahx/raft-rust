@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 pub struct RaftNet {
-    server_id: usize,
     listener: TcpListener,
 }
 
@@ -14,7 +13,6 @@ impl RaftNet {
         println!("Raft server listening on {}", ip_port);
         let socket = make_streaming_socket(ip_port).expect("Failed to make socket");
         RaftNet {
-            server_id,
             listener: socket.into(),
         }
     }
