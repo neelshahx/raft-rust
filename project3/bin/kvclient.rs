@@ -5,12 +5,11 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-fn main() -> std::result::Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let n: u8 = env::args()
         .nth(1)
         .expect("Missing argument server number [1-5]")
-        .parse()
-        .unwrap();
+        .parse()?;
 
     if n == 0 || n > 5 {
         return Err("n must be between 1 and 5".to_string().into());

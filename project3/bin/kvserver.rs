@@ -1,12 +1,12 @@
 use project3::config::APP_SERVERS;
 use project3::kvstore::KVStore;
-use socket2::{Domain, SockRef, Socket, TcpKeepalive, Type};
+use project3::network::{configure_stream, make_streaming_socket};
+use project3::raftserver::RaftServer;
 use std::env;
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 fn update_store(input: String, store: &mut KVStore) -> std::io::Result<String> {
     let parts: Vec<&str> = input.trim().split_whitespace().collect();
@@ -54,34 +54,32 @@ fn handle_client(stream: &mut TcpStream, data: Arc<Mutex<KVStore>>) -> std::io::
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let n: u8 = env::args()
+    let my_server_id: usize = env::args()
         .nth(1)
         .expect("Missing argument server number [1-5]")
         .parse()
         .unwrap();
 
-    if n == 0 || n > 5 {
-        return Err("n must be between 0 and 4".to_string().into());
+    if my_server_id == 0 || my_server_id > 5 {
+        return Err("n must be between 1 and 5".to_string().into());
     }
+
+    // RAFT SERVER
+
+    std::thread::spawn(move || RaftServer::new(my_server_id).launch());
+
+    // APP SERVER
 
     let data = Arc::new(Mutex::new(KVStore::new()));
 
-    let socket = Socket::new(Domain::IPV4, Type::STREAM, None)?;
-    socket.set_reuse_address(true)?;
-    socket.set_tcp_nodelay(true)?;
-
-    let ip_port = APP_SERVERS[usize::from(n)].1;
-    println!("Listening on {}", ip_port);
-    let addr: SocketAddr = ip_port.parse().unwrap();
-    socket.bind(&addr.into())?;
-    socket.listen(128)?;
+    let ip_port = APP_SERVERS[my_server_id].1;
+    println!("App server listening on {}", ip_port);
+    let socket = make_streaming_socket(ip_port)?;
 
     let listener: TcpListener = socket.into();
     for stream in listener.incoming() {
         let mut stream = stream?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(60));
-        SockRef::from(&stream).set_tcp_keepalive(&keepalive)?;
+        configure_stream(&stream)?;
 
         let data = Arc::clone(&data);
         std::thread::spawn(move || {

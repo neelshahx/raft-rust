@@ -1,39 +1,28 @@
-use crate::config::APP_SERVERS;
+use crate::config::RAFT_SERVERS;
 use crate::network::{configure_stream, make_streaming_socket};
-use std::collections::HashMap;
-use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
-struct RaftNet {
-    server_num: u8,
+pub struct RaftNet {
+    server_id: usize,
     listener: TcpListener,
-    connections: HashMap<u8, TcpStream>,
 }
 
 impl RaftNet {
-    pub fn new(server_num: u8) -> Result<Self, Box<dyn Error>> {
-        let listener = Self::bind(server_num)?;
-        Ok(RaftNet {
-            server_num,
-            listener,
-            connections: HashMap::new(),
-        })
-    }
-    fn bind(server_num: u8) -> Result<TcpListener, Box<dyn Error>> {
-        let ip_port = APP_SERVERS[usize::from(server_num)].1;
-        let socket = make_streaming_socket(ip_port)?;
-        let listener: TcpListener = socket.into();
-        Ok(listener)
+    pub fn new(server_id: usize) -> Self {
+        let ip_port = RAFT_SERVERS[server_id].1;
+        println!("Raft server listening on {}", ip_port);
+        let socket = make_streaming_socket(ip_port).expect("Failed to make socket");
+        RaftNet {
+            server_id,
+            listener: socket.into(),
+        }
     }
 
-    pub fn send(&mut self, dest: u8, msg: &str) -> std::io::Result<()> {
-        let stream = self.connections.entry(dest).or_insert_with(|| {
-            let ip_port = APP_SERVERS[usize::from(dest)].1;
-            let stream = TcpStream::connect(ip_port).expect("Failed to connect");
-            configure_stream(&stream).expect("Failed to configure");
-            stream
-        });
+    pub fn send(&self, dest: usize, msg: &str) -> std::io::Result<()> {
+        let ip_port = RAFT_SERVERS[usize::from(dest)].1;
+        let mut stream = TcpStream::connect(ip_port).expect("Failed to connect");
+        configure_stream(&stream).expect("Failed to configure");
         stream.write_all(msg.as_bytes())?;
         Ok(())
     }
