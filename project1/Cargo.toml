@@ -7,9 +7,9 @@ edition = "2024"
 socket2 = "0.6.1"
 
 [[bin]]
-name = "proj1_kvserver"
+name = "kvserver"
 path = "bin/kvserver.rs"
 
 [[bin]]
-name = "proj1_kvclient"
+name = "kvclient"
 path = "bin/kvclient.rs"
