@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // RAFT SERVER
 
     std::thread::spawn(move || RaftServer::new(my_server_id).launch());
-
+ 
     // APP SERVER
 
     let data = Arc::new(Mutex::new(KVStore::new()));
