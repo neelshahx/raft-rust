@@ -1,14 +1,14 @@
+use project5::raftserver::RaftServer;
 use std::env;
 use std::error::Error;
-use project5::raftserver::RaftServer;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let my_server_id = parse_server_id()?;
-    let raft_server = RaftServer::new(my_server_id, my_server_id == 1).launch();
+    let (my_server_id, num_servers) = parse_server_id()?;
+    let raft_server = RaftServer::new(my_server_id, num_servers, my_server_id == 1).launch();
     Ok(())
 }
 
-fn parse_server_id() -> Result<usize, Box<dyn Error>> {
+fn parse_server_id() -> Result<(usize, usize), Box<dyn Error>> {
     let id: usize = env::args()
         .nth(1)
         .ok_or("Missing argument server number [1-5]")?
@@ -18,5 +18,10 @@ fn parse_server_id() -> Result<usize, Box<dyn Error>> {
         return Err("Server ID must be between 1 and 5".into());
     }
 
-    Ok(id)
+    let num_servers = env::args()
+        .nth(1)
+        .ok_or("Missing argument number of servers")?
+        .parse()?;
+
+    Ok((id, num_servers))
 }

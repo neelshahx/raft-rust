@@ -1,7 +1,8 @@
-pub mod raftserver;
-pub mod raftlog;
-pub mod raftnet; // handle internal communication between raft servers
-pub mod raftconsole;
-pub mod clienthandler; // handles client <-> raft server communication
-pub mod config;
+pub mod raftserver; // connects the pieces
+pub mod raftconsole; // read from console, write to event queue
+pub mod clienthandler; // read from client, write to event queue
+pub mod raftnet; // handles raft internal network
+pub mod raftlog; // handles adds/appends to log
+pub mod raftconsensus; // TODO: adds client command to log, updates followers, updates leader
+pub mod config; // static configuration
 
