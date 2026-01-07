@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::vec::Vec;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct RaftLogEntry {
     pub term: usize,
     pub command: String,
@@ -13,7 +13,7 @@ impl RaftLogEntry {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct RaftLog {
     pub entries: Vec<RaftLogEntry>,
 }

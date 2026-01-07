@@ -16,14 +16,13 @@ pub struct RaftServer {
 
 impl RaftServer {
     pub fn new(server_id: usize, num_servers: usize, is_leader: bool) -> Self {
-        let current_term = 0;
         RaftServer {
             server_id,
             is_leader,
             client_handler: ClientHandler::new(server_id),
             console: RaftConsole::new(server_id),
             net: RaftNet::new(server_id),
-            consensus: RaftConsensus::new(server_id, current_term, num_servers),
+            consensus: RaftConsensus::new(server_id, num_servers, is_leader),
         }
     }
 
@@ -47,9 +46,7 @@ impl RaftServer {
                         consensus.new_client_command(command);
                         consensus.update_followers();
                         // TODO: send message over raftnet
-                        // for message in &consensus.outbound {
-                        //
-                        // }
+                        // TODO: clear outbound
                     }
                 }
                 SenderType::CONSOLE => {
@@ -58,8 +55,8 @@ impl RaftServer {
                         consensus.print_log();
                     }
                     match command.split_once(" ") {
-                        Some(("append_entries", command)) => {
-                            consensus.handle_append_entries(command.to_string())
+                        Some(("append", command)) => {
+                            consensus.handle_append_entries(command);
                         }
                         _ => {}
                     }
