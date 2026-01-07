@@ -18,5 +18,6 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
 
 pub enum SenderType {
     CONSOLE,
-    CLIENT
+    CLIENT,
+    RAFTNET
 }

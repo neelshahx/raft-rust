@@ -38,20 +38,35 @@ impl RaftServer {
         let client_handler = self.client_handler;
         std::thread::spawn(move || client_handler.listen(tx2));
 
+        let mut consensus = self.consensus;
         for (sender_type, command) in rx {
             match sender_type {
                 SenderType::CLIENT => {
                     if self.is_leader {
                         println!("Client command sent to leader: {}", command);
-                        self.consensus.new_client_command(command);
-                        self.consensus.update_followers();
+                        consensus.new_client_command(command);
+                        consensus.update_followers();
+                        // TODO: send message over raftnet
+                        // for message in &consensus.outbound {
+                        //
+                        // }
                     }
-                },
+                }
                 SenderType::CONSOLE => {
                     println!("Console command: {}", command);
                     if command == "show log" {
-                        self.consensus.print_log();
+                        consensus.print_log();
                     }
+                    match command.split_once(" ") {
+                        Some(("append_entries", command)) => {
+                            consensus.handle_append_entries(command.to_string())
+                        }
+                        _ => {}
+                    }
+                }
+                SenderType::RAFTNET => {
+                    // TODO: call handle follower response
+                    // TODO: call handle append entries
                 }
             }
         }

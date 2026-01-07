@@ -1,31 +1,32 @@
+use serde::{Deserialize, Serialize};
 use std::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RaftLogEntry {
-    term: usize,
-    command: String,
+    pub term: usize,
+    pub command: String,
 }
 
 impl RaftLogEntry {
-    fn new(term: usize, command: String) -> Self {
+    pub fn new(term: usize, command: String) -> Self {
         RaftLogEntry { term, command }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RaftLog {
-    log: Vec<RaftLogEntry>,
+    pub entries: Vec<RaftLogEntry>,
 }
 
 impl RaftLog {
     pub fn new() -> Self {
         RaftLog {
-            log: vec![RaftLogEntry::new(0, "".to_string())],
+            entries: vec![RaftLogEntry::new(0, "".to_string())],
         }
     }
 
     pub fn add_new_command(&mut self, leader_term: usize, command: String) {
-        self.log.push(RaftLogEntry::new(leader_term, command));
+        self.entries.push(RaftLogEntry::new(leader_term, command));
     }
 
     pub fn append_entries(
@@ -34,16 +35,16 @@ impl RaftLog {
         prev_term: usize,
         entries: Vec<RaftLogEntry>,
     ) -> bool {
-        if prev_index >= self.log.len() {
+        if prev_index >= self.entries.len() {
             return false;
         }
-        if self.log.len() > 1 && self.log[prev_index].term != prev_term {
+        if self.entries.len() > 1 && self.entries[prev_index].term != prev_term {
             return false;
         }
-        let slice = &self.log[prev_index + 1..];
+        let slice = &self.entries[prev_index + 1..];
         if slice.is_empty() {
             for entry in entries {
-                self.log.push(entry)
+                self.entries.push(entry)
             }
             return true;
         }
@@ -52,11 +53,11 @@ impl RaftLog {
             if item1.term == item2.term {
                 n += 1;
             } else {
-                self.log.truncate(prev_index + n + 1);
+                self.entries.truncate(prev_index + n + 1);
                 break;
             }
         }
-        self.log.extend(entries.into_iter().skip(n));
+        self.entries.extend(entries.into_iter().skip(n));
         true
     }
 }
@@ -68,15 +69,15 @@ mod tests {
     #[test]
     fn test_initialise() {
         let log = RaftLog::new();
-        assert_eq!(log.log.len(), 1);
+        assert_eq!(log.entries.len(), 1);
     }
 
     #[test]
     fn test_add_command() {
         let mut log = RaftLog::new();
         log.add_new_command(1, "set name alice".to_string());
-        assert_eq!(log.log[1].term, 1);
-        assert_eq!(log.log[1].command, "set name alice");
+        assert_eq!(log.entries[1].term, 1);
+        assert_eq!(log.entries[1].command, "set name alice");
     }
 
     #[test]
@@ -90,10 +91,10 @@ mod tests {
         ];
 
         log.append_entries(1, 1, entries);
-        assert_eq!(log.log.len(), 4);
-        assert_eq!(log.log[1].command, "set name alice");
-        assert_eq!(log.log[2].command, "delete name");
-        assert_eq!(log.log[3].command, "set name bob");
+        assert_eq!(log.entries.len(), 4);
+        assert_eq!(log.entries[1].command, "set name alice");
+        assert_eq!(log.entries[2].command, "delete name");
+        assert_eq!(log.entries[3].command, "set name bob");
     }
 
     #[test]
@@ -102,8 +103,8 @@ mod tests {
         log.add_new_command(1, "set name alice".to_string());
         let entries = vec![RaftLogEntry::new(2, "delete name".to_string())];
         assert_eq!(log.append_entries(2, 1, entries), false);
-        assert_eq!(log.log.len(), 2);
-        assert_eq!(log.log[1].command, "set name alice");
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[1].command, "set name alice");
     }
 
     #[test]
@@ -112,8 +113,8 @@ mod tests {
         log.add_new_command(1, "set name alice".to_string());
         let entries = vec![RaftLogEntry::new(2, "delete name".to_string())];
         assert_eq!(log.append_entries(1, 2, entries), false);
-        assert_eq!(log.log.len(), 2);
-        assert_eq!(log.log[1].command, "set name alice");
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[1].command, "set name alice");
     }
 
     #[test]
@@ -125,9 +126,9 @@ mod tests {
             RaftLogEntry::new(1, "set y 2".to_string()),
         ];
         assert!(log.append_entries(0, 0, entries));
-        assert_eq!(log.log.len(), 3);
-        assert_eq!(log.log[1].command, "set x 1");
-        assert_eq!(log.log[2].command, "set y 2");
+        assert_eq!(log.entries.len(), 3);
+        assert_eq!(log.entries[1].command, "set x 1");
+        assert_eq!(log.entries[2].command, "set y 2");
     }
 
     #[test]
@@ -137,8 +138,8 @@ mod tests {
         log.add_new_command(1, "set name alice".to_string());
         let entries: Vec<RaftLogEntry> = vec![];
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 2);
-        assert_eq!(log.log[1].command, "set name alice");
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[1].command, "set name alice");
     }
 
     #[test]
@@ -156,10 +157,10 @@ mod tests {
         ];
 
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 4);
-        assert_eq!(log.log[2].term, 3);
-        assert_eq!(log.log[2].command, "set a 10");
-        assert_eq!(log.log[3].command, "set b 20");
+        assert_eq!(log.entries.len(), 4);
+        assert_eq!(log.entries[2].term, 3);
+        assert_eq!(log.entries[2].command, "set a 10");
+        assert_eq!(log.entries[3].command, "set b 20");
     }
 
     #[test]
@@ -176,10 +177,10 @@ mod tests {
         ];
 
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 5);
-        assert_eq!(log.log[2].command, "cmd2");
-        assert_eq!(log.log[3].command, "cmd3");
-        assert_eq!(log.log[4].command, "cmd4");
+        assert_eq!(log.entries.len(), 5);
+        assert_eq!(log.entries[2].command, "cmd2");
+        assert_eq!(log.entries[3].command, "cmd3");
+        assert_eq!(log.entries[4].command, "cmd4");
     }
 
     #[test]
@@ -191,11 +192,11 @@ mod tests {
         log.add_new_command(2, "cmd3".to_string());
         log.add_new_command(2, "cmd4".to_string());
 
-        assert_eq!(log.log.len(), 5);
-        assert_eq!(log.log[1].term, 1);
-        assert_eq!(log.log[2].term, 1);
-        assert_eq!(log.log[3].term, 2);
-        assert_eq!(log.log[4].term, 2);
+        assert_eq!(log.entries.len(), 5);
+        assert_eq!(log.entries[1].term, 1);
+        assert_eq!(log.entries[2].term, 1);
+        assert_eq!(log.entries[3].term, 2);
+        assert_eq!(log.entries[4].term, 2);
     }
 
     #[test]
@@ -206,12 +207,12 @@ mod tests {
         // First append (assume RPC sends prev index = 0, prev term = 0)
         let entries1 = vec![RaftLogEntry::new(1, "cmd1".to_string())];
         assert!(log.append_entries(0, 0, entries1));
-        assert_eq!(log.log.len(), 2);
+        assert_eq!(log.entries.len(), 2);
 
         // Second append
         let entries2 = vec![RaftLogEntry::new(1, "cmd2".to_string())];
         assert!(log.append_entries(1, 1, entries2));
-        assert_eq!(log.log.len(), 3);
+        assert_eq!(log.entries.len(), 3);
 
         // Third append
         let entries3 = vec![
@@ -219,7 +220,7 @@ mod tests {
             RaftLogEntry::new(2, "cmd4".to_string()),
         ];
         assert!(log.append_entries(2, 1, entries3));
-        assert_eq!(log.log.len(), 5);
+        assert_eq!(log.entries.len(), 5);
     }
 
     #[test]
@@ -235,7 +236,7 @@ mod tests {
 
         // First append
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 4);
+        assert_eq!(log.entries.len(), 4);
 
         let entries = vec![
             RaftLogEntry::new(2, "cmd2".to_string()),
@@ -244,9 +245,9 @@ mod tests {
 
         // Appending the same entries again should be idempotent
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 4);
-        assert_eq!(log.log[2].command, "cmd2");
-        assert_eq!(log.log[3].command, "cmd3");
+        assert_eq!(log.entries.len(), 4);
+        assert_eq!(log.entries[2].command, "cmd2");
+        assert_eq!(log.entries[3].command, "cmd3");
     }
 
     #[test]
@@ -258,7 +259,7 @@ mod tests {
         // Try to append at index 3 when log only has index 1
         let entries = vec![RaftLogEntry::new(2, "cmd2".to_string())];
         assert!(!log.append_entries(3, 2, entries));
-        assert_eq!(log.log.len(), 2); // Log unchanged
+        assert_eq!(log.entries.len(), 2); // Log unchanged
     }
 
     #[test]
@@ -276,9 +277,9 @@ mod tests {
         ];
 
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 4);
-        assert_eq!(log.log[2].term, 3);
-        assert_eq!(log.log[3].term, 3);
+        assert_eq!(log.entries.len(), 4);
+        assert_eq!(log.entries[2].term, 3);
+        assert_eq!(log.entries[3].term, 3);
     }
 
     #[test]
@@ -296,8 +297,8 @@ mod tests {
         ];
 
         assert!(log.append_entries(1, 1, entries));
-        assert_eq!(log.log.len(), 6);
-        assert_eq!(log.log[5].command, "cmd5");
+        assert_eq!(log.entries.len(), 6);
+        assert_eq!(log.entries[5].command, "cmd5");
     }
 
     #[test]
@@ -306,7 +307,7 @@ mod tests {
         let mut log = RaftLog::new();
         let entries = vec![RaftLogEntry::new(1, "first".to_string())];
         assert!(log.append_entries(0, 0, entries));
-        assert_eq!(log.log.len(), 2);
-        assert_eq!(log.log[1].command, "first");
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[1].command, "first");
     }
 }
