@@ -31,6 +31,13 @@ name = "project4"
 version = "0.1.0"
 
 [[package]]
+name = "project5"
+version = "0.1.0"
+dependencies = [
+ "socket2",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,15 @@
+[package]
+name = "project5"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+socket2 = "0.6.1"
+
+[[bin]]
+name = "server"
+path = "bin/server.rs"
+
+[[bin]]
+name = "client"
+path = "bin/client.rs"
