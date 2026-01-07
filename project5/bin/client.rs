@@ -1,8 +1,8 @@
-use project5::config::APP_SERVERS;
+use project5::shared::APP_SERVERS;
 use project5::raftnet::configure_stream;
 use std::env;
 use std::error::Error;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         stream.write_all(input.as_bytes())?;
 
-        // TMP(nshah, 2025/1/7): dont wait for response
+        // TODO : move response handling to separate thread
         // let mut buf = [0u8; 1024];
         // let n = stream.read(&mut buf)?;
         // if n > 0 {

@@ -1,4 +1,4 @@
-use crate::config::RAFT_SERVERS;
+use crate::shared::RAFT_SERVERS;
 use socket2::{Domain, SockRef, Socket, TcpKeepalive, Type};
 use std::error::Error;
 use std::io::{Read, Write};

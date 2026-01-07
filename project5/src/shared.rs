@@ -15,3 +15,8 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
     (4, "127.0.0.1:14000"),
     (5, "127.0.0.1:15000"),
 ];
+
+pub enum SenderType {
+    CONSOLE,
+    CLIENT
+}

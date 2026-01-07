@@ -1,3 +1,4 @@
+use crate::shared::SenderType;
 use std::io::Write;
 use std::sync::mpsc::Sender;
 
@@ -10,15 +11,14 @@ impl RaftConsole {
         RaftConsole { server_id }
     }
 
-    pub(crate) fn start(&self, tx: Sender<String>) {
+    pub(crate) fn start(&self, tx: Sender<(SenderType, String)>) {
         loop {
-            std::io::stdout().flush().ok();
             print!("RC {}>", self.server_id);
             std::io::stdout().flush().ok();
 
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).ok();
-            tx.send(input.trim().to_string()).ok();
+            tx.send((SenderType::CONSOLE, input.trim().to_string())).ok();
         }
     }
 }

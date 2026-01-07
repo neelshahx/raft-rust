@@ -1,5 +1,6 @@
 use std::vec::Vec;
 
+#[derive(Debug)]
 pub struct RaftLogEntry {
     term: usize,
     command: String,
@@ -11,22 +12,23 @@ impl RaftLogEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct RaftLog {
     log: Vec<RaftLogEntry>,
 }
 
 impl RaftLog {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         RaftLog {
             log: vec![RaftLogEntry::new(0, "".to_string())],
         }
     }
 
-    fn add_new_command(&mut self, leader_term: usize, command: String) {
+    pub fn add_new_command(&mut self, leader_term: usize, command: String) {
         self.log.push(RaftLogEntry::new(leader_term, command));
     }
 
-    fn append_entries(
+    pub fn append_entries(
         &mut self,
         prev_index: usize,
         prev_term: usize,
