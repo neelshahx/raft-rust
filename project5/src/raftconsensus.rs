@@ -60,15 +60,20 @@ impl RaftConsensus {
     pub fn handle_follower_response(&mut self, message: &str) {
         let message: AppendEntriesResponse = serde_json::from_str(message).unwrap();
         if message.success {
-            self.next_index[message.follower_id] = message.match_index;
+            self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
+        } else {
+            self.next_index[message.follower_id] -= 1;
         }
-        todo!("handle term mismatch")
     }
 
     // FOLLOWER FUNCTIONS
     pub fn handle_append_entries(&mut self, message: &str) -> (usize, bool) {
+        assert!(!self.is_leader);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
+        if message.term < self.current_term {
+            return (message.leader_id, false);
+        }
         (
             message.leader_id,
             self.log
@@ -77,6 +82,7 @@ impl RaftConsensus {
     }
 
     pub fn respond_to_leader(&mut self, leader_id: usize, success: bool) {
+        assert!(!self.is_leader);
         let message = AppendEntriesResponse {
             follower_id: self.server_id,
             match_index: self.log.entries.len() - 1,
@@ -130,6 +136,32 @@ mod tests {
         let mut leader = RaftConsensus::new(1, 2, true);
         let mut follower = RaftConsensus::new(2, 2, false);
         leader.new_client_command("set name alice".to_string());
+
+        two_server_request_response(&mut leader, &mut follower);
+
+        assert_eq!(leader.log, follower.log);
+        assert_eq!(leader.next_index[2], 2);
+        assert_eq!(leader.match_index[2], 1);
+    }
+
+    #[test]
+    fn test_multiple_replication() {
+        let mut leader = RaftConsensus::new(1, 2, true);
+        leader.new_client_command("set name alice".to_string());
+        leader.new_client_command("get name".to_string());
+        leader.new_client_command("set name bob".to_string());
+
+        let mut follower = RaftConsensus::new(2, 2, false);
+
+        for _ in 0..3 {
+            two_server_request_response(&mut leader, &mut follower);
+        }
+
+        assert_eq!(leader.log, follower.log);
+        assert_eq!(leader.next_index[2], 4);
+    }
+
+    fn two_server_request_response(leader: &mut RaftConsensus, follower: &mut RaftConsensus) {
         leader.update_followers();
         for message in &leader.outbound {
             match message.split_once(' ') {
@@ -144,6 +176,7 @@ mod tests {
             }
         }
         leader.outbound.clear();
+
         for message in &follower.outbound {
             match message.split_once(' ') {
                 Some((id_str, json_str)) => {
@@ -156,7 +189,5 @@ mod tests {
             }
         }
         follower.outbound.clear();
-        assert_eq!(leader.log, follower.log);
-        assert_eq!(leader.next_index[2], 2);
     }
 }
