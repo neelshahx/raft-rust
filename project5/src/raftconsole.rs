@@ -12,6 +12,7 @@ impl RaftConsole {
 
     pub(crate) fn start(&self, tx: Sender<String>) {
         loop {
+            std::io::stdout().flush().ok();
             print!("RC {}>", self.server_id);
             std::io::stdout().flush().ok();
 

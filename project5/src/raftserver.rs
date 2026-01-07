@@ -18,7 +18,7 @@ impl RaftServer {
         RaftServer {
             server_id,
             is_leader,
-            client_handler: ClientHandler::new(),
+            client_handler: ClientHandler::new(server_id),
             console: RaftConsole::new(server_id),
             net: RaftNet::new(server_id),
             log: RaftLog::new(),
@@ -29,8 +29,12 @@ impl RaftServer {
         let (tx, rx) = mpsc::channel::<String>();
 
         let tx1 = tx.clone();
+        let client_handler = self.client_handler;
+        std::thread::spawn(move || client_handler.listen(tx1));
+
+        let tx2 = tx.clone();
         let console = self.console;
-        std::thread::spawn(move || console.start(tx1));
+        std::thread::spawn(move || console.start(tx2));
 
         // need client handler
 
@@ -40,9 +44,10 @@ impl RaftServer {
             println!("{}", recv);
 
             // if recv == show log
-            
+
             // handle add (L) or update (F)
             // add to log
         }
+
     }
 }
