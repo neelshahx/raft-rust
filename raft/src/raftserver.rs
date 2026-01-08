@@ -1,4 +1,4 @@
-use crate::clienthandler::ClientHandler;
+use crate::clientnet::ClientNet;
 use crate::kvstore::KVStore;
 use crate::raftconsensus::RaftConsensus;
 use crate::raftconsole::RaftConsole;
@@ -7,7 +7,7 @@ use crate::shared::{Role, Source};
 use std::sync::mpsc;
 
 pub struct RaftServer {
-    client_handler: ClientHandler,
+    client_handler: ClientNet,
     kvstore: KVStore,
     consensus: RaftConsensus,
     net: RaftNet,
@@ -22,7 +22,7 @@ impl RaftServer {
             Role::FOLLOWER
         };
         RaftServer {
-            client_handler: ClientHandler::new(server_id),
+            client_handler: ClientNet::new(server_id),
             kvstore: KVStore::new(),
             consensus: RaftConsensus::new(server_id, num_servers, role),
             net: RaftNet::new(server_id),

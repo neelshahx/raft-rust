@@ -5,14 +5,14 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
-pub struct ClientHandler {
+pub struct ClientNet {
     server_id: usize,
     streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
-impl ClientHandler {
+impl ClientNet {
     pub fn new(server_id: usize) -> Self {
-        ClientHandler {
+        ClientNet {
             server_id,
             streams: Arc::new(Mutex::new(HashMap::new())),
         }
