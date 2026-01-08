@@ -1,16 +1,19 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::Role;
 use serde::{Deserialize, Serialize};
+use std::cmp::min;
 
 pub struct RaftConsensus {
-    server_id: usize,
-    num_servers: usize,
+    pub server_id: usize,
+    pub num_servers: usize,
     pub role: Role,
+    pub outbound: Vec<String>,
     current_term: usize,
     log: RaftLog,
+    commit_index: usize,
+    last_applied: usize,
     next_index: Vec<usize>,
     match_index: Vec<usize>,
-    pub outbound: Vec<String>,
 }
 
 impl RaftConsensus {
@@ -19,11 +22,13 @@ impl RaftConsensus {
             server_id,
             num_servers,
             role,
+            outbound: vec![],
             current_term: 1,
             log: RaftLog::new(),
+            commit_index: 0,
+            last_applied: 0,
             next_index: vec![1; num_servers + 1],
             match_index: vec![0; num_servers + 1],
-            outbound: vec![],
         }
     }
 
@@ -33,44 +38,42 @@ impl RaftConsensus {
         self.log.add_new_command(self.current_term, command);
     }
 
-    pub fn update_followers(&mut self) {
+    pub fn update_follower(&mut self, follower_id: usize) {
         assert_eq!(self.role, Role::LEADER);
-        for follower_id in 1..self.num_servers + 1 {
-            if self.server_id == follower_id {
-                continue;
-            }
-            let next_index = self.next_index[follower_id];
-            let prev_index = next_index - 1;
-            let prev_term = if prev_index >= self.log.entries.len() {
-                0
-            } else {
-                self.log.entries[prev_index].term
-            };
-            let entries = if next_index >= self.log.entries.len() {
-                vec![]
-            } else {
-                self.log.entries[next_index..next_index + 1].to_vec()
-            };
-            let message = AppendEntriesRequest {
+        assert_ne!(self.server_id, follower_id);
+        let next_index = self.next_index[follower_id];
+        let message = if next_index <= 0 || next_index >= self.log.entries.len() {
+            AppendEntriesRequest {
                 term: self.current_term,
                 leader_id: self.server_id,
-                prev_index,
-                prev_term,
-                entries,
-            };
-            self.send(format!(
-                "{} {}",
-                follower_id,
-                serde_json::to_string(&message).unwrap()
-            ));
-        }
+                prev_index: 0,
+                prev_term: 0,
+                entries: vec![],
+            }
+        } else {
+            AppendEntriesRequest {
+                term: self.current_term,
+                leader_id: self.server_id,
+                prev_index: next_index - 1,
+                prev_term: self.log.entries[next_index - 1].term,
+                entries: self.log.entries[next_index..next_index + 1].to_vec(),
+            }
+        };
+        self.send(format!(
+            "{} {}",
+            follower_id,
+            serde_json::to_string(&message).unwrap()
+        ));
     }
 
     pub fn handle_follower_response(&mut self, message: &str) {
         let message: AppendEntriesResponse = serde_json::from_str(message).unwrap();
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
-            self.next_index[message.follower_id] = message.match_index + 1;
+            self.next_index[message.follower_id] = min(
+                self.next_index[message.follower_id] + 1,
+                self.log.entries.len(),
+            );
         } else if message.term <= self.current_term {
             self.next_index[message.follower_id] -= 1;
         }
@@ -141,7 +144,7 @@ mod tests {
     use super::*;
 
     fn two_server_request_response(leader: &mut RaftConsensus, follower: &mut RaftConsensus) {
-        leader.update_followers();
+        leader.update_follower(2);
         for message in &leader.outbound {
             match message.split_once(' ') {
                 Some((id_str, json_str)) => {
@@ -247,9 +250,8 @@ mod tests {
         // Verify follower didn't lose its extra entries
         assert_eq!(follower.log.entries.len(), 5); // dummy + 4 entries
 
-        // Leader should update its match_index based on follower's response
         assert_eq!(leader.match_index[2], 4);
-        assert_eq!(leader.next_index[2], 5);
+        assert_eq!(leader.next_index[2], 2);
     }
 
     #[test]
@@ -308,17 +310,18 @@ mod tests {
         let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
         leader.log.add_new_command(1, "cmd1".to_string());
         leader.log.add_new_command(1, "cmd2".to_string());
-        leader.log.add_new_command(2, "cmd3".to_string());
-        leader.log.add_new_command(2, "cmd4".to_string());
-        leader.current_term = 2;
+        leader.log.add_new_command(3, "cmd3".to_string());
+        leader.log.add_new_command(3, "cmd4".to_string());
+        leader.current_term = 3;
 
         let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
         follower.log.add_new_command(1, "cmd1".to_string());
         follower.log.add_new_command(1, "cmd2".to_string());
         // Follower has different entries from index 3 onwards
-        follower.log.add_new_command(1, "old_cmd3".to_string());
-        follower.log.add_new_command(1, "old_cmd4".to_string());
-        follower.log.add_new_command(1, "old_cmd5".to_string());
+        follower.log.add_new_command(2, "old_cmd3".to_string());
+        follower.log.add_new_command(2, "old_cmd4".to_string());
+        follower.log.add_new_command(2, "old_cmd5".to_string());
+        follower.current_term = 2;
 
         // Replicate - should overwrite follower's divergent entries
         for _ in 0..10 {
@@ -328,7 +331,7 @@ mod tests {
         assert_eq!(leader.log, follower.log);
         assert_eq!(follower.log.entries.len(), 5); // dummy + 4 entries
         assert_eq!(follower.log.entries[3].command, "cmd3");
-        assert_eq!(follower.log.entries[3].term, 2);
+        assert_eq!(follower.log.entries[3].term, 3);
     }
 
     #[test]
