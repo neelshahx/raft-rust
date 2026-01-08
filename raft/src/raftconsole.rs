@@ -7,11 +7,11 @@ pub struct RaftConsole {
 }
 
 impl RaftConsole {
-    pub(crate) fn new(server_id: usize) -> Self {
+    pub fn new(server_id: usize) -> Self {
         RaftConsole { server_id }
     }
 
-    pub(crate) fn start(&self, tx: Sender<(Source, String)>) {
+    pub fn start(&self, tx: Sender<(Source, String)>) {
         loop {
             print!("RC {}>", self.server_id);
             std::io::stdout().flush().ok();
