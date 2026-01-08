@@ -27,3 +27,44 @@ pub enum Role {
     LEADER,
     FOLLOWER,
 }
+
+pub fn asc_sort_median(match_index: Vec<usize>) -> usize {
+    let mut match_index = match_index[1..].to_vec();
+    match_index.sort();
+    if match_index.is_empty() {
+        0
+    } else if match_index.len() % 2 == 0 {
+        match_index[match_index.len() / 2 - 1]
+    } else {
+        match_index[match_index.len() / 2]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_match_index() {
+        let match_index = Vec::from([0]);
+        assert_eq!(asc_sort_median(match_index), 0);
+    }
+
+    #[test]
+    fn test_match_index_len1() {
+        let match_index = Vec::from([0, 1]);
+        assert_eq!(asc_sort_median(match_index), 1);
+    }
+
+    #[test]
+    fn test_match_index_len2() {
+        let match_index = Vec::from([0, 2, 1]);
+        assert_eq!(asc_sort_median(match_index), 1);
+    }
+
+    #[test]
+    fn test_match_index_len3() {
+        let match_index = Vec::from([0, 3, 2, 1]);
+        assert_eq!(asc_sort_median(match_index), 2);
+    }
+}

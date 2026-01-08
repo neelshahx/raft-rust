@@ -45,8 +45,8 @@ impl RaftServer {
                     match consensus.role {
                         Role::LEADER => {
                             consensus.new_client_command(command);
-                            for follower_id in 1..consensus.num_servers+1 {
-                                consensus.update_follower(follower_id);    
+                            for follower_id in 1..consensus.num_servers + 1 {
+                                consensus.update_follower(follower_id);
                             }
                             // TODO: send message over raftnet
                             // TODO: clear outbound
@@ -64,7 +64,7 @@ impl RaftServer {
                         // self.client_handler.print(); // kvstore
                     }
                     Some(("command", cmd)) => {
-                        consensus.handle_append_entries(cmd);
+                        consensus.handle_append_entries_request(cmd);
                     }
                     Some(("update", "")) => {}
                     Some(("leader", "")) => {

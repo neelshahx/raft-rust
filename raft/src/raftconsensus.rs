@@ -1,7 +1,6 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
-use crate::shared::Role;
+use crate::shared::{asc_sort_median, Role};
 use serde::{Deserialize, Serialize};
-use std::cmp::min;
 
 pub struct RaftConsensus {
     pub server_id: usize,
@@ -66,18 +65,20 @@ impl RaftConsensus {
         ));
     }
 
-    pub fn handle_follower_response(&mut self, message: &str) {
+    pub fn handle_append_entries_response(&mut self, message: &str) {
         let message: AppendEntriesResponse = serde_json::from_str(message).unwrap();
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
+            // update commit index
+            self.commit_index = asc_sort_median(self.match_index.clone());
         } else if message.term <= self.current_term {
             self.next_index[message.follower_id] -= 1;
         }
     }
 
     // FOLLOWER FUNCTIONS
-    pub fn handle_append_entries(&mut self, message: &str) -> (usize, bool) {
+    pub fn handle_append_entries_request(&mut self, message: &str) -> (usize, bool) {
         assert_eq!(self.role, Role::FOLLOWER);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
         if message.term < self.current_term {
@@ -147,7 +148,7 @@ mod tests {
                 Some((id_str, json_str)) => {
                     let follower_id: usize = id_str.parse().unwrap();
                     if follower_id == 2 {
-                        let (leader_id, success) = follower.handle_append_entries(json_str);
+                        let (leader_id, success) = follower.handle_append_entries_request(json_str);
                         follower.respond_to_leader(leader_id, success);
                     }
                 }
@@ -161,7 +162,7 @@ mod tests {
                 Some((id_str, json_str)) => {
                     let leader_id: usize = id_str.parse().unwrap();
                     if leader_id == 1 {
-                        leader.handle_follower_response(json_str);
+                        leader.handle_append_entries_response(json_str);
                     }
                 }
                 _ => {}
