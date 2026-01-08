@@ -1,4 +1,5 @@
 use crate::clienthandler::ClientHandler;
+use crate::kvstore::KVStore;
 use crate::raftconsensus::RaftConsensus;
 use crate::raftconsole::RaftConsole;
 use crate::raftnet::RaftNet;
@@ -6,10 +7,11 @@ use crate::shared::{Role, Source};
 use std::sync::mpsc;
 
 pub struct RaftServer {
-    console: RaftConsole,
     client_handler: ClientHandler,
-    net: RaftNet,
+    kvstore: KVStore,
     consensus: RaftConsensus,
+    net: RaftNet,
+    console: RaftConsole,
 }
 
 impl RaftServer {
@@ -21,9 +23,10 @@ impl RaftServer {
         };
         RaftServer {
             client_handler: ClientHandler::new(server_id),
-            console: RaftConsole::new(server_id),
-            net: RaftNet::new(server_id),
+            kvstore: KVStore::new(),
             consensus: RaftConsensus::new(server_id, num_servers, role),
+            net: RaftNet::new(server_id),
+            console: RaftConsole::new(server_id),
         }
     }
 
@@ -66,9 +69,10 @@ impl RaftServer {
                             Some(("cmd", args)) => {
                                 consensus.new_client_command(args.to_string());
                                 consensus.update_follower(2);
-                            },
+                            }
                             Some(("req", args)) => {
-                                let (leader_id, success) = consensus.handle_append_entries_request(args);
+                                let (leader_id, success) =
+                                    consensus.handle_append_entries_request(args);
                                 consensus.respond_to_leader(leader_id, success)
                             }
                             Some(("rep", json)) => consensus.handle_append_entries_response(json),

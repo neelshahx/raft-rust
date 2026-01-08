@@ -1,4 +1,4 @@
-use crate::raftnet::{configure_stream, make_streaming_socket};
+use crate::shared::{configure_stream, make_streaming_socket};
 use crate::shared::{Source, APP_SERVERS};
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};
@@ -18,6 +18,10 @@ fn handle_client(mut stream: TcpStream, tx: Sender<(Source, String)>) {
         let client_cmd = String::from_utf8_lossy(&buf[..n]);
         tx.send((Source::CLIENT, client_cmd.to_string())).unwrap();
     }
+}
+
+fn send_response() {
+    todo!();
 }
 
 impl ClientHandler {

@@ -1,8 +1,8 @@
-use raft::raftnet::configure_stream;
+use raft::shared::configure_stream;
 use raft::shared::APP_SERVERS;
 use std::env;
 use std::error::Error;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -13,23 +13,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut stream = TcpStream::connect(ip_port)?;
     configure_stream(&stream)?;
 
+    let mut stream2 = stream.try_clone()?;
+    std::thread::spawn(move || {
+        loop {
+            print!("KV>");
+            let _ = std::io::stdout().flush();
+            let mut input = String::new();
+            let _ = std::io::stdin().read_line(&mut input);
+            let _ = stream2.write_all(input.as_bytes());
+        }
+    });
+
     loop {
-        print!("KV>");
-        std::io::stdout().flush()?;
-
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-
-        stream.write_all(input.as_bytes())?;
-
-        // TODO : move response handling to separate thread
-        // let mut buf = [0u8; 1024];
-        // let n = stream.read(&mut buf)?;
-        // if n > 0 {
-        //     println!("{}", String::from_utf8_lossy(&buf[..n]));
-        // } else {
-        //     println!("No response.")
-        // }
+        let mut buf = [0u8; 1024];
+        let n = stream.read(&mut buf)?;
+        if n > 0 {
+            println!("{}", String::from_utf8_lossy(&buf[..n]));
+        }
     }
 }
 

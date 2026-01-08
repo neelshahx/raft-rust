@@ -76,9 +76,9 @@ impl RaftConsensus {
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
-            let N = asc_sort_median(self.match_index.clone());
-            if N <= self.log.entries.len() && self.log.entries[N].term == self.current_term {
-                self.commit_index = N;
+            let n = asc_sort_median(self.match_index.clone());
+            if n <= self.log.entries.len() && self.log.entries[n].term == self.current_term {
+                self.commit_index = n;
             }
         } else if message.term <= self.current_term {
             self.next_index[message.follower_id] = max(self.next_index[message.follower_id] - 1, 1);
