@@ -97,7 +97,6 @@ impl RaftConsensus {
     }
 
     // SHARED FUNCTIONS
-
     pub fn send(&mut self, message: String) {
         self.outbound.push(message);
     }
