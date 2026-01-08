@@ -1,6 +1,7 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::{asc_sort_median, Role};
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 
 pub struct RaftConsensus {
     pub server_id: usize,
@@ -45,6 +46,7 @@ impl RaftConsensus {
             AppendEntriesRequest {
                 term: self.current_term,
                 leader_id: self.server_id,
+                leader_commit_index: self.commit_index,
                 prev_index: 0,
                 prev_term: 0,
                 entries: vec![],
@@ -53,6 +55,7 @@ impl RaftConsensus {
             AppendEntriesRequest {
                 term: self.current_term,
                 leader_id: self.server_id,
+                leader_commit_index: self.commit_index,
                 prev_index: next_index - 1,
                 prev_term: self.log.entries[next_index - 1].term,
                 entries: self.log.entries[next_index..next_index + 1].to_vec(),
@@ -70,7 +73,6 @@ impl RaftConsensus {
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
-            // update commit index
             self.commit_index = asc_sort_median(self.match_index.clone());
         } else if message.term <= self.current_term {
             self.next_index[message.follower_id] -= 1;
@@ -81,6 +83,7 @@ impl RaftConsensus {
     pub fn handle_append_entries_request(&mut self, message: &str) -> (usize, bool) {
         assert_eq!(self.role, Role::FOLLOWER);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
+        self.commit_index = max(self.commit_index, message.leader_commit_index);
         if message.term < self.current_term {
             return (message.leader_id, false);
         }
@@ -124,6 +127,7 @@ impl RaftConsensus {
 pub struct AppendEntriesRequest {
     pub term: usize,
     pub leader_id: usize,
+    pub leader_commit_index: usize,
     pub prev_index: usize,
     pub prev_term: usize,
     pub entries: Vec<RaftLogEntry>,
