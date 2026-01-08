@@ -63,21 +63,26 @@ impl RaftServer {
                 Source::CONSOLE => {
                     if !command.trim().is_empty() {
                         match command.split_once(' ') {
-                            Some(("command", args)) => consensus.new_client_command(args.to_string()),
-                            Some(("update", follower_id)) => {
-                                consensus.update_follower(follower_id.parse().unwrap());
+                            Some(("cmd", args)) => {
+                                consensus.new_client_command(args.to_string());
+                                consensus.update_follower(2);
+                            },
+                            Some(("req", args)) => {
+                                let (leader_id, success) = consensus.handle_append_entries_request(args);
+                                consensus.respond_to_leader(leader_id, success)
                             }
+                            Some(("rep", json)) => consensus.handle_append_entries_response(json),
                             None => match command.as_str() {
                                 "state" => consensus.print_consensus(),
                                 "log" => consensus.print_log(),
                                 "leader" => consensus.role = Role::LEADER,
                                 "follower" => consensus.role = Role::FOLLOWER,
                                 _ => println!("Unknown: {}", command),
-                            }
+                            },
                             _ => println!("Unknown: {}", command),
                         }
                     }
-                },
+                }
                 Source::INTERNAL => {
                     // TODO: call handle follower response
                     // TODO: call handle append entries

@@ -127,7 +127,10 @@ impl RaftConsensus {
         println!("\nserver_id: {}", self.server_id);
         println!("num_servers: {}", self.num_servers);
         println!("role: {:?}", self.role);
-        println!("outbound: {:?}", self.outbound);
+        println!("outbound:");
+        for msg in &self.outbound {
+            println!("  {}", msg);
+        }
         println!("current_term: {}", self.current_term);
         println!("commit_index: {}", self.commit_index);
         println!("last_applied: {}", self.last_applied);
