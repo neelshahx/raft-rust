@@ -1,10 +1,11 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
+use crate::shared::Role;
 use serde::{Deserialize, Serialize};
 
 pub struct RaftConsensus {
     server_id: usize,
     num_servers: usize,
-    is_leader: bool,
+    pub role: Role,
     current_term: usize,
     log: RaftLog,
     next_index: Vec<usize>,
@@ -13,11 +14,11 @@ pub struct RaftConsensus {
 }
 
 impl RaftConsensus {
-    pub fn new(server_id: usize, num_servers: usize, is_leader: bool) -> Self {
+    pub fn new(server_id: usize, num_servers: usize, role: Role) -> Self {
         RaftConsensus {
             server_id,
             num_servers,
-            is_leader,
+            role,
             current_term: 1,
             log: RaftLog::new(),
             next_index: vec![1; num_servers + 1],
@@ -28,12 +29,12 @@ impl RaftConsensus {
 
     // LEADER FUNCTIONS
     pub fn new_client_command(&mut self, command: String) {
-        assert!(self.is_leader);
+        assert_eq!(self.role, Role::LEADER);
         self.log.add_new_command(self.current_term, command);
     }
 
     pub fn update_followers(&mut self) {
-        assert!(self.is_leader);
+        assert_eq!(self.role, Role::LEADER);
         for follower_id in 1..self.num_servers + 1 {
             if self.server_id == follower_id {
                 continue;
@@ -69,7 +70,7 @@ impl RaftConsensus {
 
     // FOLLOWER FUNCTIONS
     pub fn handle_append_entries(&mut self, message: &str) -> (usize, bool) {
-        assert!(!self.is_leader);
+        assert_eq!(self.role, Role::FOLLOWER);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
         if message.term < self.current_term {
             return (message.leader_id, false);
@@ -82,7 +83,7 @@ impl RaftConsensus {
     }
 
     pub fn respond_to_leader(&mut self, leader_id: usize, success: bool) {
-        assert!(!self.is_leader);
+        assert_eq!(self.role, Role::FOLLOWER);
         let message = AppendEntriesResponse {
             follower_id: self.server_id,
             match_index: self.log.entries.len() - 1,
@@ -133,8 +134,8 @@ mod tests {
 
     #[test]
     fn test_single_replication() {
-        let mut leader = RaftConsensus::new(1, 2, true);
-        let mut follower = RaftConsensus::new(2, 2, false);
+        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
         leader.new_client_command("set name alice".to_string());
 
         two_server_request_response(&mut leader, &mut follower);
@@ -146,12 +147,12 @@ mod tests {
 
     #[test]
     fn test_multiple_replication() {
-        let mut leader = RaftConsensus::new(1, 2, true);
+        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
         leader.new_client_command("set name alice".to_string());
         leader.new_client_command("get name".to_string());
         leader.new_client_command("set name bob".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, false);
+        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
 
         for _ in 0..3 {
             two_server_request_response(&mut leader, &mut follower);

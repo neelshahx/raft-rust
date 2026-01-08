@@ -2,12 +2,10 @@ use crate::clienthandler::ClientHandler;
 use crate::raftconsensus::RaftConsensus;
 use crate::raftconsole::RaftConsole;
 use crate::raftnet::RaftNet;
-use crate::shared::SenderType;
+use crate::shared::{Role, Source};
 use std::sync::mpsc;
 
 pub struct RaftServer {
-    server_id: usize,
-    is_leader: bool,
     console: RaftConsole,
     client_handler: ClientHandler,
     net: RaftNet,
@@ -16,18 +14,21 @@ pub struct RaftServer {
 
 impl RaftServer {
     pub fn new(server_id: usize, num_servers: usize, is_leader: bool) -> Self {
+        let role = if is_leader {
+            Role::LEADER
+        } else {
+            Role::FOLLOWER
+        };
         RaftServer {
-            server_id,
-            is_leader,
             client_handler: ClientHandler::new(server_id),
             console: RaftConsole::new(server_id),
             net: RaftNet::new(server_id),
-            consensus: RaftConsensus::new(server_id, num_servers, is_leader),
+            consensus: RaftConsensus::new(server_id, num_servers, role),
         }
     }
 
     pub fn launch(mut self) {
-        let (tx, rx) = mpsc::channel::<(SenderType, String)>();
+        let (tx, rx) = mpsc::channel::<(Source, String)>();
 
         let tx1 = tx.clone();
         let console = self.console;
@@ -40,28 +41,41 @@ impl RaftServer {
         let mut consensus = self.consensus;
         for (sender_type, command) in rx {
             match sender_type {
-                SenderType::CLIENT => {
-                    if self.is_leader {
-                        println!("Client command sent to leader: {}", command);
-                        consensus.new_client_command(command);
-                        consensus.update_followers();
-                        // TODO: send message over raftnet
-                        // TODO: clear outbound
-                    }
-                }
-                SenderType::CONSOLE => {
-                    println!("Console command: {}", command);
-                    if command == "show log" {
-                        consensus.print_log();
-                    }
-                    match command.split_once(" ") {
-                        Some(("append", command)) => {
-                            consensus.handle_append_entries(command);
+                Source::CLIENT => {
+                    match consensus.role {
+                        Role::LEADER => {
+                            consensus.new_client_command(command);
+                            consensus.update_followers();
+                            // TODO: send message over raftnet
+                            // TODO: clear outbound
                         }
-                        _ => {}
+                        Role::FOLLOWER => {
+                            // consensus.handle_append_entries(command);
+                            // consensus.respond_to_leader();
+                        }
                     }
                 }
-                SenderType::RAFTNET => {
+                Source::CONSOLE => match command.split_once(' ') {
+                    Some(("log", "")) => consensus.print_log(),
+                    Some(("state", "")) => {
+                        // self.consensus.print(); // outbound
+                        // self.client_handler.print(); // kvstore
+                    }
+                    Some(("command", cmd)) => {
+                        consensus.handle_append_entries(cmd);
+                    }
+                    Some(("update", "")) => {}
+                    Some(("leader", "")) => {
+                        consensus.role = Role::LEADER;
+                    }
+                    Some(("follower", "")) => {
+                        consensus.role = Role::FOLLOWER;
+                    }
+                    _ => {
+                        println!("Received unknown console command: {}", command);
+                    }
+                },
+                Source::INTERNAL => {
                     // TODO: call handle follower response
                     // TODO: call handle append entries
                 }

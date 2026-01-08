@@ -1,5 +1,5 @@
-use raft::shared::APP_SERVERS;
 use raft::raftnet::configure_stream;
+use raft::shared::APP_SERVERS;
 use std::env;
 use std::error::Error;
 use std::io::Write;

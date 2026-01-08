@@ -16,8 +16,14 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
     (5, "127.0.0.1:15000"),
 ];
 
-pub enum SenderType {
+pub enum Source {
     CONSOLE,
     CLIENT,
-    RAFTNET
+    INTERNAL,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Role {
+    LEADER,
+    FOLLOWER,
 }
