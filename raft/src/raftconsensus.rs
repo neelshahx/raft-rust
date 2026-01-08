@@ -1,7 +1,7 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::{asc_sort_median, Role};
 use serde::{Deserialize, Serialize};
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::io::Write;
 
 pub struct RaftConsensus {
@@ -37,13 +37,15 @@ impl RaftConsensus {
     pub fn new_client_command(&mut self, command: String) {
         assert_eq!(self.role, Role::LEADER);
         self.log.add_new_command(self.current_term, command);
+        self.match_index[self.server_id] += 1;
     }
 
     pub fn update_follower(&mut self, follower_id: usize) {
         assert_eq!(self.role, Role::LEADER);
         assert_ne!(self.server_id, follower_id);
         let next_index = self.next_index[follower_id];
-        let message = if next_index <= 0 || next_index >= self.log.entries.len() {
+        assert!(next_index > 0, "next_index should never be less than 1");
+        let message = if next_index >= self.log.entries.len() {
             AppendEntriesRequest {
                 term: self.current_term,
                 leader_id: self.server_id,
@@ -74,9 +76,12 @@ impl RaftConsensus {
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
-            self.commit_index = asc_sort_median(self.match_index.clone());
+            let N = asc_sort_median(self.match_index.clone());
+            if N <= self.log.entries.len() && self.log.entries[N].term == self.current_term {
+                self.commit_index = N;
+            }
         } else if message.term <= self.current_term {
-            self.next_index[message.follower_id] -= 1;
+            self.next_index[message.follower_id] = max(self.next_index[message.follower_id] - 1, 1);
         }
     }
 
