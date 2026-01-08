@@ -1,38 +1,59 @@
-use crate::shared::RAFT_SERVERS;
+use crate::shared::{Source, RAFT_SERVERS};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 
 pub struct RaftNet {
-    listener: TcpListener,
+    server_id: usize,
+    streams: Arc<Mutex<HashMap<usize, TcpStream>>>,
 }
 
-// TODO
-// connection reuse
-// should receive run in a loop from caller?
-// should receive use incoming instead?
 impl RaftNet {
-    pub(crate) fn new(server_id: usize) -> Self {
-        let ip_port = RAFT_SERVERS[server_id].1;
-        println!("Raft server listening on {}", ip_port);
+    pub fn new(server_id: usize) -> Self {
         RaftNet {
-            listener: TcpListener::bind(ip_port).unwrap(),
+            server_id,
+            streams: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn listen(&self, tx: Sender<(Source, String)>) {
+        let ip_port = RAFT_SERVERS[self.server_id].1;
+        println!("Raft server listening on {}", ip_port);
+        let listener = TcpListener::bind(ip_port).expect("bind failed");
+
+        for stream in listener.incoming() {
+            let stream = stream.expect("connection failed");
+            let _ = stream.set_nodelay(true);
+            let tx = tx.clone();
+            std::thread::spawn(move || Self::handle_raftserver(stream, tx));
         }
     }
 
     pub fn send(&self, dest: usize, msg: &str) -> std::io::Result<()> {
-        let ip_port = RAFT_SERVERS[usize::from(dest)].1;
-        let mut stream = TcpStream::connect(ip_port)?;
-        stream.set_nodelay(true)?;
-        stream.write_all(msg.as_bytes())?;
+        let mut streams = self.streams.lock().unwrap();
+        if let Some(stream) = streams.get_mut(&dest) {
+            stream.write_all(msg.as_bytes())?;
+        } else {
+            let ip_port = RAFT_SERVERS[dest].1;
+            let mut stream = TcpStream::connect(ip_port)?;
+            stream.set_nodelay(true)?;
+            stream.write_all(msg.as_bytes())?;
+            streams.insert(dest, stream);
+        }
         Ok(())
     }
 
-    pub fn receive(&self) -> std::io::Result<String> {
-        let (mut stream, addr) = self.listener.accept()?;
-        stream.set_nodelay(true)?;
-        println!("Received message from {}", addr);
-        let mut buf = [0u8; 1024];
-        let n = stream.read(&mut buf)?;
-        Ok(String::from_utf8_lossy(&buf[..n]).to_string())
+    fn handle_raftserver(mut stream: TcpStream, tx: Sender<(Source, String)>) {
+        loop {
+            let mut buf = [0u8; 1024];
+            let n = match stream.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            let message = String::from_utf8_lossy(&buf[..n]).to_string();
+            let _ = tx.send((Source::INTERNAL, message));
+        }
     }
 }

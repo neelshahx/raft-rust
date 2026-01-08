@@ -18,7 +18,6 @@ impl ClientHandler {
         }
     }
 
-    // tx: allows message passing back to RaftServer, one channel per client
     pub fn listen(&self, tx: Sender<(Source, String)>) {
         let ip_port = APP_SERVERS[self.server_id].1;
         println!("App server listening on {}", ip_port);
@@ -28,7 +27,7 @@ impl ClientHandler {
             let stream = stream.expect("connection failed");
             let _ = stream.set_nodelay(true);
             let tx = tx.clone();
-            let streams = self.streams.clone(); // pointer to hashmap
+            let streams = self.streams.clone();
             let addr = stream
                 .peer_addr()
                 .ok()
@@ -38,13 +37,12 @@ impl ClientHandler {
         }
     }
 
-    pub fn send_response(&self, addr: &str, msg: &str) {
+    pub fn send(&self, addr: &str, msg: &str) {
         if let Some(stream) = self.streams.lock().unwrap().get_mut(addr) {
             let _ = stream.write_all(msg.as_bytes());
         }
     }
 
-    // can't move &self into spawned thread, thus  arc<mutex<streams>> passed onto handle_client
     fn handle_client(
         mut stream: TcpStream,
         addr: String,
