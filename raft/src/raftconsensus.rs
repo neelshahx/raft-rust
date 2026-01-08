@@ -1,7 +1,7 @@
 use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::{asc_sort_median, Role};
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
+use std::cmp::min;
 
 pub struct RaftConsensus {
     pub server_id: usize,
@@ -83,15 +83,18 @@ impl RaftConsensus {
     pub fn handle_append_entries_request(&mut self, message: &str) -> (usize, bool) {
         assert_eq!(self.role, Role::FOLLOWER);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
-        self.commit_index = max(self.commit_index, message.leader_commit_index);
         if message.term < self.current_term {
             return (message.leader_id, false);
         }
-        (
+        let result = (
             message.leader_id,
             self.log
                 .append_entries(message.prev_index, message.prev_term, message.entries),
-        )
+        );
+        if message.leader_commit_index > self.commit_index {
+            self.commit_index = min(message.leader_commit_index, self.log.entries.len() - 1);
+        }
+        result
     }
 
     pub fn respond_to_leader(&mut self, leader_id: usize, success: bool) {
