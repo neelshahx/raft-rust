@@ -1,50 +1,73 @@
 use crate::shared::{Source, APP_SERVERS};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 
 pub struct ClientHandler {
     server_id: usize,
-}
-
-fn handle_client(mut stream: TcpStream, addr: String, tx: Sender<(Source, String)>) {
-    loop {
-        let mut buf = [0u8; 1024];
-        let n = stream.read(&mut buf).unwrap();
-        if n == 0 {
-            break;
-        }
-        let client_cmd = String::from_utf8_lossy(&buf[..n]);
-        tx.send((
-            Source::CLIENT,
-            format!("{} {}", addr, client_cmd.to_string()),
-        ))
-        .unwrap();
-    }
-}
-
-fn send_response(addr: String, msg: String) {
-    let mut stream = TcpStream::connect(addr).unwrap();
-    let _ = stream.set_nodelay(true);
-    stream.write_all(msg.as_bytes());
+    streams: Arc<Mutex<HashMap<String, TcpStream>>>,
 }
 
 impl ClientHandler {
     pub fn new(server_id: usize) -> Self {
-        ClientHandler { server_id }
+        ClientHandler {
+            server_id,
+            streams: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     // tx: allows message passing back to RaftServer, one channel per client
     pub fn listen(&self, tx: Sender<(Source, String)>) {
         let ip_port = APP_SERVERS[self.server_id].1;
         println!("App server listening on {}", ip_port);
-        let listener = TcpListener::bind(ip_port).unwrap();
+        let listener = TcpListener::bind(ip_port).expect("bind failed");
 
-        loop {
-            let (stream, addr) = listener.accept().expect("connection failed");
-            stream.set_nodelay(true).unwrap();
+        for stream in listener.incoming() {
+            let stream = stream.expect("connection failed");
+            let _ = stream.set_nodelay(true);
             let tx = tx.clone();
-            std::thread::spawn(move || handle_client(stream, addr.to_string(), tx));
+            let streams = self.streams.clone(); // pointer to hashmap
+            let addr = stream
+                .peer_addr()
+                .ok()
+                .map(|a| a.to_string())
+                .unwrap_or_default();
+            std::thread::spawn(move || Self::handle_client(stream, addr, tx, streams));
         }
+    }
+
+    pub fn send_response(&self, addr: &str, msg: &str) {
+        if let Some(stream) = self.streams.lock().unwrap().get_mut(addr) {
+            let _ = stream.write_all(msg.as_bytes());
+        }
+    }
+
+    // can't move &self into spawned thread, thus  arc<mutex<streams>> passed onto handle_client
+    fn handle_client(
+        mut stream: TcpStream,
+        addr: String,
+        tx: Sender<(Source, String)>,
+        streams: Arc<Mutex<HashMap<String, TcpStream>>>,
+    ) {
+        streams
+            .lock()
+            .unwrap()
+            .insert(addr.clone(), stream.try_clone().unwrap());
+        loop {
+            let mut buf = [0u8; 1024];
+            let n = stream.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            let client_cmd = String::from_utf8_lossy(&buf[..n]);
+            tx.send((
+                Source::CLIENT,
+                format!("{} {}", addr, client_cmd.to_string()),
+            ))
+            .unwrap();
+        }
+        streams.lock().unwrap().remove(&addr);
     }
 }
