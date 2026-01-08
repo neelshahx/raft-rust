@@ -19,7 +19,7 @@ fn parse_args() -> Result<(usize, usize), Box<dyn Error>> {
     }
 
     let num_servers = env::args()
-        .nth(1)
+        .nth(2)
         .ok_or("Missing argument number of servers")?
         .parse()?;
 

@@ -46,6 +46,9 @@ impl RaftServer {
                         Role::LEADER => {
                             consensus.new_client_command(command);
                             for follower_id in 1..consensus.num_servers + 1 {
+                                if follower_id == consensus.server_id {
+                                    continue;
+                                }
                                 consensus.update_follower(follower_id);
                             }
                             // TODO: send message over raftnet
@@ -57,24 +60,22 @@ impl RaftServer {
                         }
                     }
                 }
-                Source::CONSOLE => match command.split_once(' ') {
-                    Some(("log", "")) => consensus.print_log(),
-                    Some(("state", "")) => {
-                        // self.consensus.print(); // outbound
-                        // self.client_handler.print(); // kvstore
-                    }
-                    Some(("command", cmd)) => {
-                        consensus.handle_append_entries_request(cmd);
-                    }
-                    Some(("update", "")) => {}
-                    Some(("leader", "")) => {
-                        consensus.role = Role::LEADER;
-                    }
-                    Some(("follower", "")) => {
-                        consensus.role = Role::FOLLOWER;
-                    }
-                    _ => {
-                        println!("Received unknown console command: {}", command);
+                Source::CONSOLE => {
+                    if !command.trim().is_empty() {
+                        match command.split_once(' ') {
+                            Some(("command", args)) => consensus.new_client_command(args.to_string()),
+                            Some(("update", follower_id)) => {
+                                consensus.update_follower(follower_id.parse().unwrap());
+                            }
+                            None => match command.as_str() {
+                                "state" => consensus.print_consensus(),
+                                "log" => consensus.print_log(),
+                                "leader" => consensus.role = Role::LEADER,
+                                "follower" => consensus.role = Role::FOLLOWER,
+                                _ => println!("Unknown: {}", command),
+                            }
+                            _ => println!("Unknown: {}", command),
+                        }
                     }
                 },
                 Source::INTERNAL => {

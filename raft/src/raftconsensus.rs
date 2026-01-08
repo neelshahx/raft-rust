@@ -2,6 +2,7 @@ use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::{asc_sort_median, Role};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
+use std::io::Write;
 
 pub struct RaftConsensus {
     pub server_id: usize,
@@ -121,8 +122,23 @@ impl RaftConsensus {
     pub fn accept(&self) {
         todo!("handle append entry request or response and delegate to appropriate function");
     }
+
+    pub fn print_consensus(&self) {
+        println!("\nserver_id: {}", self.server_id);
+        println!("num_servers: {}", self.num_servers);
+        println!("role: {:?}", self.role);
+        println!("outbound: {:?}", self.outbound);
+        println!("current_term: {}", self.current_term);
+        println!("commit_index: {}", self.commit_index);
+        println!("last_applied: {}", self.last_applied);
+        println!("next_index: {:?}", self.next_index);
+        println!("match_index: {:?}", self.match_index);
+        std::io::stdout().flush().ok();
+    }
+
     pub fn print_log(&self) {
-        println!("{:#?}", self.log);
+        println!("\n{:#?}", self.log);
+        std::io::stdout().flush().ok();
     }
 }
 
