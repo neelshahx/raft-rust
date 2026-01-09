@@ -81,8 +81,14 @@ impl RaftConsensus {
             if n <= self.log.entries.len() && self.log.entries[n].term == self.current_term {
                 self.commit_index = n;
             }
-        } else if message.term <= self.current_term {
-            self.next_index[message.follower_id] = max(self.next_index[message.follower_id] - 1, 1);
+        } else {
+            if message.term <= self.current_term {
+                self.next_index[message.follower_id] =
+                    max(self.next_index[message.follower_id] - 1, 1);
+                self.update_follower(message.follower_id); // retry
+            } else {
+                // TODO: convert to follower
+            }
         }
     }
 
@@ -174,34 +180,40 @@ pub struct AppendEntriesResponse {
 mod tests {
     use super::*;
 
+    fn handle_message(message: &str, consensus_obj: &mut RaftConsensus) {
+        match message.splitn(3, ' ').collect::<Vec<_>>().as_slice() {
+            [server_id, message_type, message] => match *message_type {
+                "append_entries_request" => {
+                    let follower_id: usize = server_id.parse().unwrap();
+                    if follower_id == consensus_obj.server_id {
+                        let (leader_id, success) =
+                            consensus_obj.handle_append_entries_request(message);
+                        consensus_obj.respond_to_leader(leader_id, success);
+                    }
+                }
+                "append_entries_response" => {
+                    let leader_id: usize = server_id.parse().unwrap();
+                    if leader_id == consensus_obj.server_id {
+                        consensus_obj.handle_append_entries_response(message);
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
     fn two_server_request_response(leader: &mut RaftConsensus, follower: &mut RaftConsensus) {
         leader.update_follower(2);
-        for message in &leader.outbound {
-            match message.split_once(' ') {
-                Some((id_str, json_str)) => {
-                    let follower_id: usize = id_str.parse().unwrap();
-                    if follower_id == 2 {
-                        let (leader_id, success) = follower.handle_append_entries_request(json_str);
-                        follower.respond_to_leader(leader_id, success);
-                    }
-                }
-                _ => {}
-            }
+        let messages = std::mem::take(&mut leader.outbound);
+        for message in &messages {
+            handle_message(message, follower);
         }
-        leader.outbound.clear();
 
-        for message in &follower.outbound {
-            match message.split_once(' ') {
-                Some((id_str, json_str)) => {
-                    let leader_id: usize = id_str.parse().unwrap();
-                    if leader_id == 1 {
-                        leader.handle_append_entries_response(json_str);
-                    }
-                }
-                _ => {}
-            }
+        let messages = std::mem::take(&mut follower.outbound);
+        for message in &messages {
+            handle_message(message, leader);
         }
-        follower.outbound.clear();
     }
 
     #[test]
