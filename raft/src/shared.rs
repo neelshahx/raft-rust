@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub const APP_SERVERS: [(u8, &str); 6] = [
     (0, "0.0.0.0:0"),
     (1, "127.0.0.1:21000"),
@@ -20,6 +22,39 @@ pub enum Source {
     Console,
     ClientNet,
     RaftNet,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum MessageType {
+    NewClientCommand,
+    NewConsoleCommand,
+    AppendEntriesRequest,
+    AppendEntriesResponse,
+    Heartbeat,
+    ResponseToClient,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Agent {
+    Client,
+    ConsensusModule,
+    RaftServer,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ChannelType {
+    Thread,
+    Network,
+    Poll,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Message {
+    pub message_type: MessageType,
+    pub channel: ChannelType,
+    pub from: Agent,
+    pub to: Agent,
+    pub from_addr: String,
+    pub to_addr: String,
 }
 
 #[derive(Debug, PartialEq)]
