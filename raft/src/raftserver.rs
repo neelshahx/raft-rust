@@ -1,5 +1,5 @@
 use crate::clientnet::ClientNet;
-use crate::kvstore::KVStore;
+use crate::kvapp::KVApp;
 use crate::raftconsensus::RaftConsensus;
 use crate::raftconsole::RaftConsole;
 use crate::raftnet::RaftNet;
@@ -7,8 +7,8 @@ use crate::shared::{Role, Source};
 use std::sync::{mpsc, Arc};
 
 pub struct RaftServer {
+    kvapp: KVApp,
     consensus: RaftConsensus,
-    kvstore: KVStore,
     client_net: Arc<ClientNet>,
     raft_net: Arc<RaftNet>,
     console: RaftConsole,
@@ -22,8 +22,8 @@ impl RaftServer {
             Role::Follower
         };
         RaftServer {
+            kvapp: KVApp::new(),
             consensus: RaftConsensus::new(server_id, num_servers, role),
-            kvstore: KVStore::new(),
             client_net: Arc::new(ClientNet::new(server_id)),
             raft_net: Arc::new(RaftNet::new(server_id)),
             console: RaftConsole::new(server_id),
@@ -33,20 +33,20 @@ impl RaftServer {
     pub fn run(self) {
         let (tx, rx) = mpsc::channel::<(Source, String)>();
 
-        let tx1 = tx.clone();
+        let tx_console = tx.clone();
         let console = self.console;
-        std::thread::spawn(move || console.start(tx1));
+        std::thread::spawn(move || console.start(tx_console));
 
-        let tx2 = tx.clone();
+        let tx_client = tx.clone();
         let client_net_listner = self.client_net.clone();
-        std::thread::spawn(move || client_net_listner.listen(tx2));
+        std::thread::spawn(move || client_net_listner.listen(tx_client));
 
-        let tx3 = tx.clone();
+        let tx_raft = tx.clone();
         let raft_net_listener = self.raft_net.clone();
-        std::thread::spawn(move || raft_net_listener.listen(tx3));
+        std::thread::spawn(move || raft_net_listener.listen(tx_raft));
 
-        let client_net = self.client_net.clone();
-        let raft_net = self.raft_net.clone();
+        let client_net_sender = self.client_net.clone();
+        let raft_net_sender = self.raft_net.clone();
 
         let mut consensus = self.consensus;
         for (sender_type, command) in rx {
@@ -61,9 +61,12 @@ impl RaftServer {
                             consensus.update_follower(follower_id);
                         }
                     }
-                    Role::Follower => {
-                        todo!("talk to the leader");
-                    }
+                    Role::Follower => match command.split_once(' ') {
+                        Some((addr, _)) => client_net_sender.send(addr, "invalid talk to leader"),
+                        _ => {
+                            panic!("invalid state")
+                        }
+                    },
                 },
                 Source::RaftNet => match command.split_once(' ') {
                     Some(("append_entries_response", message)) => {
@@ -103,10 +106,10 @@ impl RaftServer {
                 }
             }
 
-            for message in &consensus.outbound {
+            for message in &consensus.outbox {
                 match message.splitn(3, ' ').collect::<Vec<_>>().as_slice() {
                     [server_id, message_type, message] => {
-                        raft_net
+                        raft_net_sender
                             .send(
                                 server_id.parse().unwrap(),
                                 &format!("{} {}", message_type, message),
@@ -116,7 +119,7 @@ impl RaftServer {
                     _ => {}
                 }
             }
-            consensus.outbound.clear();
+            consensus.outbox.clear();
         }
     }
 }

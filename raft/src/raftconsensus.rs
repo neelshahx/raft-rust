@@ -8,7 +8,7 @@ pub struct RaftConsensus {
     pub server_id: usize,
     pub num_servers: usize,
     pub role: Role,
-    pub outbound: Vec<String>,
+    pub outbox: Vec<String>,
     current_term: usize,
     log: RaftLog,
     commit_index: usize,
@@ -23,7 +23,7 @@ impl RaftConsensus {
             server_id,
             num_servers,
             role,
-            outbound: vec![],
+            outbox: vec![],
             current_term: 1,
             log: RaftLog::new(),
             commit_index: 0,
@@ -129,7 +129,7 @@ impl RaftConsensus {
     // SHARED FUNCTIONS
 
     pub fn send(&mut self, message: String) {
-        self.outbound.push(message);
+        self.outbox.push(message);
     }
 
     pub fn accept(&self) {
@@ -141,7 +141,7 @@ impl RaftConsensus {
         println!("num_servers: {}", self.num_servers);
         println!("role: {:?}", self.role);
         println!("outbound:");
-        for msg in &self.outbound {
+        for msg in &self.outbox {
             println!("  {}", msg);
         }
         println!("current_term: {}", self.current_term);
@@ -205,12 +205,12 @@ mod tests {
 
     fn two_server_request_response(leader: &mut RaftConsensus, follower: &mut RaftConsensus) {
         leader.update_follower(2);
-        let messages = std::mem::take(&mut leader.outbound);
+        let messages = std::mem::take(&mut leader.outbox);
         for message in &messages {
             handle_message(message, follower);
         }
 
-        let messages = std::mem::take(&mut follower.outbound);
+        let messages = std::mem::take(&mut follower.outbox);
         for message in &messages {
             handle_message(message, leader);
         }

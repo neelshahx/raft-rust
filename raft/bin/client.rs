@@ -26,7 +26,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut buf = [0u8; 1024];
         let n = stream_in.read(&mut buf)?;
         if n > 0 {
-            println!("{}", String::from_utf8_lossy(&buf[..n]));
+            let reply = String::from_utf8_lossy(&buf[..n]);
+            match reply.split_once(' ') {
+                Some((message_type, message)) => {
+                    match message_type {
+                        "invalid" => panic!("{}", message),
+                        _ => println!("{} {}", message_type, message),
+                    }
+                }
+                _ => println!("{}", reply),
+            }
         }
     }
 }
