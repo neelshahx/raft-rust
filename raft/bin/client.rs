@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Some((message_type, message)) => {
                     match message_type {
                         "invalid" => panic!("{}", message),
-                        _ => println!("{} {}", message_type, message),
+                        _ => println!("{}", reply),
                     }
                 }
                 _ => println!("{}", reply),

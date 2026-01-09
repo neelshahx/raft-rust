@@ -48,6 +48,8 @@ impl RaftServer {
         let client_net_sender = self.client_net.clone();
         let raft_net_sender = self.raft_net.clone();
 
+        // TASK: use the same message format in mpsc/net/outbox
+
         let mut consensus = self.consensus;
         for (sender_type, command) in rx {
             match sender_type {
@@ -61,11 +63,10 @@ impl RaftServer {
                             consensus.update_follower(follower_id);
                         }
                     }
-                    Role::Follower => match command.split_once(' ') {
-                        Some((addr, _)) => client_net_sender.send(addr, "invalid talk to leader"),
-                        _ => {
-                            panic!("invalid state")
-                        }
+                    Role::Follower => {
+                        todo!("Route to leader");
+                        // problem: we're getting a local message, need to send it over raft net
+                        // raft_net_sender.send(consensus.leader_id, command);
                     },
                 },
                 Source::RaftNet => match command.split_once(' ') {
