@@ -33,9 +33,8 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum InternalMessage {
-    ClientCommand { addr: String, payload: String },
+    ClientCommand { addr: String, command: String },
     ConsoleCommand(String),
-    RaftNet(String),
     IncomingRaftMessage(RaftNetMessage),
     AppendEntries { server_id: usize, payload: AppendEntries },
     AppendEntriesResponse { server_id: usize, payload: AppendEntriesResponse },

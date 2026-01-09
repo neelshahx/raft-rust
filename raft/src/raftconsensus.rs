@@ -91,6 +91,7 @@ impl RaftConsensus {
                 // TODO: convert to follower
             }
         }
+        // retry
     }
 
     // FOLLOWER FUNCTIONS

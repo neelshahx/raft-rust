@@ -56,6 +56,13 @@ impl RaftServer {
 
         for message in rx {
             match message {
+                InternalMessage::ClientCommand {addr, command} => {
+                    if consensus.role == Role::Leader {
+                        consensus.new_client_command(command);
+                    } else {
+                        todo!("Route to leader via RaftNet");
+                    }
+                }
                 InternalMessage::ConsoleCommand(command) => {
                     if !command.trim().is_empty() {
                         match command.as_str() {
@@ -90,7 +97,7 @@ impl RaftServer {
                         if follower_id != self.server_id {
                             let payload = serde_json::to_string(&message).unwrap();
                             log!("Sending RequestVote {} {:#?}", follower_id, payload);
-                            raft_net.send(follower_id, &message).unwrap();
+                            raft_net.send(follower_id, &message);
                         }
                     }
                 }
@@ -102,13 +109,22 @@ impl RaftServer {
                     RaftNetMessage::RequestVoteResponse(request_vote_response) => {}
                     RaftNetMessage::AppendEntries(append_entries) => {
                         self.heard_from_leader.store(true, Ordering::Relaxed);
+                        let (leader_id, success) = consensus.handle_append_entries_request(&append_entries);
+                        consensus.respond_to_leader(leader_id, success);
+                    }
+                    RaftNetMessage::AppendEntriesResponse(append_entries_response) => {
+                        consensus.handle_append_entries_response(&append_entries_response);
                     }
                     _ => {}
                 },
                 InternalMessage::AppendEntries {server_id, payload} => {
-                    raft_net.send(server_id, &RaftNetMessage::AppendEntries(payload)).unwrap();
+                    raft_net.send(server_id, &RaftNetMessage::AppendEntries(payload));
+                }
+                InternalMessage::AppendEntriesResponse {server_id, payload} => {
+                    raft_net.send(server_id, &RaftNetMessage::AppendEntriesResponse(payload));
                 }
                 InternalMessage::Tick => {
+                    log!("Tick");
                     // heartbeats/catchup followers
                     if consensus.role == Role::Leader {
                         for server_id in 1..self.num_servers + 1 {
@@ -118,14 +134,11 @@ impl RaftServer {
                         }
                     }
                 }
-                _ => {}
             }
 
             if consensus.role == Role::Leader || consensus.role == Role::Candidate {
                 self.heard_from_leader.store(true, Ordering::Relaxed);
             }
-
-
 
             // update state machine
             while consensus.commit_index > kvapp.last_applied {
@@ -151,7 +164,7 @@ pub struct RequestVote {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RequestVoteResponse {
     term: usize,
-    voteGranted: bool,
+    vote_granted: bool,
 }
 
 pub fn election_timer(heard_from_leader: Arc<AtomicBool>, tx: Sender<InternalMessage>) {

@@ -62,7 +62,7 @@ impl ClientNet {
             let command = String::from_utf8_lossy(&buf[..n]);
             let _ = tx.send(InternalMessage::ClientCommand {
                 addr: addr.clone(),
-                payload: command.to_string(),
+                command: command.to_string(),
             });
         }
         streams.lock().unwrap().remove(&addr);
