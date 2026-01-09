@@ -1,7 +1,7 @@
 use crate::clientnet::ClientNet;
 use crate::kvapp::KVApp;
 use crate::log;
-use crate::raftconsensus::{AppendEntries, RaftConsensus};
+use crate::raftconsensus::RaftConsensus;
 use crate::raftconsole::RaftConsole;
 use crate::raftnet::RaftNet;
 use crate::shared::{InternalMessage, RaftNetMessage, Role};
@@ -47,25 +47,32 @@ impl RaftServer {
         let heard_from_leader = self.heard_from_leader.clone();
         std::thread::spawn(move || election_timer(heard_from_leader, tx4));
         let tx5 = tx.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(Duration::from_secs(1));
-            let _ = tx5.send(InternalMessage::Tick);
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(1));
+                let _ = tx5.send(InternalMessage::Tick);
+            }
         });
         let tx6 = tx.clone();
         consensus.set_sender(tx6);
 
         for message in rx {
             match message {
-                InternalMessage::ClientCommand {addr, command} => {
+                InternalMessage::ClientCommand { addr, command } => {
                     if consensus.role == Role::Leader {
                         consensus.new_client_command(command);
-                    } else {
-                        todo!("Route to leader via RaftNet");
                     }
                 }
                 InternalMessage::ConsoleCommand(command) => {
                     if !command.trim().is_empty() {
                         match command.as_str() {
+                            "flood" => {
+                                if consensus.role == Role::Leader {
+                                    for n in 1..=10000 {
+                                        consensus.new_client_command(format!("cmd{}", n));
+                                    }
+                                }
+                            }
                             "state" => {
                                 println!("\nheard_from_leader: {:?}", self.heard_from_leader);
                                 consensus.print_consensus()
@@ -79,7 +86,7 @@ impl RaftServer {
                     }
                 }
                 InternalMessage::StartElection => {
-                    log!("Started election");
+                    // log!("Started election");
                     consensus.role = Role::Candidate;
                     consensus.current_term += 1;
                     consensus.voted_for = Some(self.server_id);
@@ -96,20 +103,21 @@ impl RaftServer {
                     for follower_id in 1..self.num_servers + 1 {
                         if follower_id != self.server_id {
                             let payload = serde_json::to_string(&message).unwrap();
-                            log!("Sending RequestVote {} {:#?}", follower_id, payload);
+                            // log!("Sending RequestVote {} {:#?}", follower_id, payload);
                             raft_net.send(follower_id, &message);
                         }
                     }
                 }
                 InternalMessage::IncomingRaftMessage(raft_message) => match raft_message {
                     RaftNetMessage::RequestVote(request_vote) => {
-                        println!("Vote request received {:?}", request_vote);
+                        // log!("Vote request received {:?}", request_vote);
                         self.heard_from_leader.store(true, Ordering::Relaxed);
                     }
                     RaftNetMessage::RequestVoteResponse(request_vote_response) => {}
                     RaftNetMessage::AppendEntries(append_entries) => {
                         self.heard_from_leader.store(true, Ordering::Relaxed);
-                        let (leader_id, success) = consensus.handle_append_entries_request(&append_entries);
+                        let (leader_id, success) =
+                            consensus.handle_append_entries_request(&append_entries);
                         consensus.respond_to_leader(leader_id, success);
                     }
                     RaftNetMessage::AppendEntriesResponse(append_entries_response) => {
@@ -117,14 +125,13 @@ impl RaftServer {
                     }
                     _ => {}
                 },
-                InternalMessage::AppendEntries {server_id, payload} => {
+                InternalMessage::AppendEntries { server_id, payload } => {
                     raft_net.send(server_id, &RaftNetMessage::AppendEntries(payload));
                 }
-                InternalMessage::AppendEntriesResponse {server_id, payload} => {
+                InternalMessage::AppendEntriesResponse { server_id, payload } => {
                     raft_net.send(server_id, &RaftNetMessage::AppendEntriesResponse(payload));
                 }
                 InternalMessage::Tick => {
-                    log!("Tick");
                     // heartbeats/catchup followers
                     if consensus.role == Role::Leader {
                         for server_id in 1..self.num_servers + 1 {
@@ -145,7 +152,7 @@ impl RaftServer {
                 let command = consensus.log.entries[kvapp.last_applied + 1]
                     .command
                     .clone();
-                log! {"applied command {}", command}
+                log! {"Applied: {}", command}
                 kvapp.apply_command(command);
                 kvapp.last_applied += 1;
             }

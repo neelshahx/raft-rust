@@ -2,11 +2,22 @@ use raft::log;
 use raft::shared::APP_SERVERS;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_id = parse_server_id()?;
     let ip_port = APP_SERVERS[usize::from(server_id)].1;
-    log!("Client connected to app server on {}", ip_port);
+
+    loop {
+        if let Err(e) = run(ip_port) {
+            eprintln!("Disconnected: {}. Retrying in 2s...", e);
+            std::thread::sleep(Duration::from_secs(2));
+        }
+    }
+}
+
+fn run(ip_port: &str) -> std::io::Result<()> {
+    log!("Client connecting to app server on {}", ip_port);
     let mut stream_in = TcpStream::connect(ip_port)?;
     stream_in.set_nodelay(true)?;
 
@@ -17,16 +28,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = std::io::stdout().flush();
             let mut input = String::new();
             let _ = std::io::stdin().read_line(&mut input);
-            let _ = stream_out.write_all(input.as_bytes());
+            if stream_out.write_all(input.as_bytes()).is_err() {
+                break;
+            }
         }
     });
 
     loop {
         let mut buf = [0u8; 1024];
-        let n = stream_in.read(&mut buf)?;
-        if n > 0 {
-            let reply = String::from_utf8_lossy(&buf[..n]);
-            println!("{}", reply);
+        match stream_in.read(&mut buf) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "server closed connection",
+                ));
+            }
+            Ok(n) => {
+                let reply = String::from_utf8_lossy(&buf[..n]);
+                println!("{}", reply);
+            }
+            Err(e) => return Err(e),
         }
     }
 }

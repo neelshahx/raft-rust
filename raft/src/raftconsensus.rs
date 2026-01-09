@@ -1,4 +1,3 @@
-use crate::log;
 use crate::raftlog::{RaftLog, RaftLogEntry};
 use crate::shared::{asc_sort_median, InternalMessage, Role};
 use serde::{Deserialize, Serialize};
@@ -87,11 +86,8 @@ impl RaftConsensus {
                 self.next_index[message.follower_id] =
                     max(self.next_index[message.follower_id] - 1, 1);
                 self.update_follower(message.follower_id); // retry
-            } else {
-                // TODO: convert to follower
             }
         }
-        // retry
     }
 
     // FOLLOWER FUNCTIONS
@@ -132,15 +128,10 @@ impl RaftConsensus {
     }
 
     pub fn send(&mut self, message: InternalMessage) {
-        log!("Sending: {:?}", message);
         self.outbox.push(message.clone());
         if let Some(tx) = &self.tx {
             let _ = tx.send(message);
         }
-    }
-
-    pub fn accept(&self) {
-        todo!("handle append entry request or response and delegate to appropriate function");
     }
 
     pub fn print_consensus(&self) {
