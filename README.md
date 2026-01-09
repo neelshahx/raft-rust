@@ -16,7 +16,6 @@ Not implemented
 - ...
 
 To compile
-
 ```cargo
 cargo build
 cargo test
