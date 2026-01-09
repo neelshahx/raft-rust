@@ -12,10 +12,10 @@ pub struct RaftConsensus {
     pub role: Role,
     pub tx: Option<Sender<InternalMessage>>,
     pub outbox: Vec<InternalMessage>,
-    current_term: usize,
-    log: RaftLog,
-    commit_index: usize,
-    last_applied: usize,
+    pub current_term: usize,
+    pub voted_for: Option<usize>,
+    pub log: RaftLog,
+    pub commit_index: usize,
     next_index: Vec<usize>,
     match_index: Vec<usize>,
 }
@@ -29,9 +29,9 @@ impl RaftConsensus {
             tx: None,
             outbox: vec![],
             current_term: 1,
+            voted_for: None,
             log: RaftLog::new(),
             commit_index: 0,
-            last_applied: 0,
             next_index: vec![1; num_servers + 1],
             match_index: vec![0; num_servers + 1],
         }
@@ -49,8 +49,8 @@ impl RaftConsensus {
         assert_ne!(self.server_id, follower_id);
         let next_index = self.next_index[follower_id];
         assert!(next_index > 0, "next_index should never be less than 1");
-        let message = if next_index >= self.log.entries.len() {
-            AppendEntriesRequest {
+        let payload = if next_index >= self.log.entries.len() {
+            AppendEntries {
                 term: self.current_term,
                 leader_id: self.server_id,
                 leader_commit_index: self.commit_index,
@@ -59,7 +59,7 @@ impl RaftConsensus {
                 entries: vec![],
             }
         } else {
-            AppendEntriesRequest {
+            AppendEntries {
                 term: self.current_term,
                 leader_id: self.server_id,
                 leader_commit_index: self.commit_index,
@@ -68,14 +68,13 @@ impl RaftConsensus {
                 entries: self.log.entries[next_index..next_index + 1].to_vec(),
             }
         };
-        self.send(InternalMessage::AppendEntriesRequest {
+        self.send(InternalMessage::AppendEntries {
             server_id: follower_id,
-            payload: serde_json::to_string(&message).unwrap(),
+            payload,
         });
     }
 
-    pub fn handle_append_entries_response(&mut self, message: &str) {
-        let message: AppendEntriesResponse = serde_json::from_str(message).unwrap();
+    pub fn handle_append_entries_response(&mut self, message: &AppendEntriesResponse) {
         if message.success {
             self.match_index[message.follower_id] = message.match_index;
             self.next_index[message.follower_id] = message.match_index + 1;
@@ -95,16 +94,15 @@ impl RaftConsensus {
     }
 
     // FOLLOWER FUNCTIONS
-    pub fn handle_append_entries_request(&mut self, message: &str) -> (usize, bool) {
+    pub fn handle_append_entries_request(&mut self, message: &AppendEntries) -> (usize, bool) {
         assert_eq!(self.role, Role::Follower);
-        let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
         if message.term < self.current_term {
             return (message.leader_id, false);
         }
         let result = (
             message.leader_id,
             self.log
-                .append_entries(message.prev_index, message.prev_term, message.entries),
+                .append_entries(message.prev_index, message.prev_term, &message.entries),
         );
         if message.leader_commit_index > self.commit_index {
             self.commit_index = min(message.leader_commit_index, self.log.entries.len() - 1);
@@ -114,7 +112,7 @@ impl RaftConsensus {
 
     pub fn respond_to_leader(&mut self, leader_id: usize, success: bool) {
         assert_eq!(self.role, Role::Follower);
-        let message = AppendEntriesResponse {
+        let payload = AppendEntriesResponse {
             follower_id: self.server_id,
             match_index: self.log.entries.len() - 1,
             term: self.current_term,
@@ -122,7 +120,7 @@ impl RaftConsensus {
         };
         self.send(InternalMessage::AppendEntriesResponse {
             server_id: leader_id,
-            payload: serde_json::to_string(&message).unwrap(),
+            payload,
         });
     }
 
@@ -145,12 +143,11 @@ impl RaftConsensus {
     }
 
     pub fn print_consensus(&self) {
-        println!("\nserver_id: {}", self.server_id);
+        println!("server_id: {}", self.server_id);
         println!("num_servers: {}", self.num_servers);
         println!("role: {:?}", self.role);
         println!("current_term: {}", self.current_term);
         println!("commit_index: {}", self.commit_index);
-        println!("last_applied: {}", self.last_applied);
         println!("next_index: {:?}", self.next_index);
         println!("match_index: {:?}", self.match_index);
         std::io::stdout().flush().ok();
@@ -162,8 +159,8 @@ impl RaftConsensus {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AppendEntriesRequest {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AppendEntries {
     pub term: usize,
     pub leader_id: usize,
     pub leader_commit_index: usize,
@@ -172,7 +169,7 @@ pub struct AppendEntriesRequest {
     pub entries: Vec<RaftLogEntry>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppendEntriesResponse {
     pub follower_id: usize,
     pub match_index: usize,
@@ -186,7 +183,7 @@ mod tests {
 
     fn handle_message(message: &InternalMessage, consensus_obj: &mut RaftConsensus) {
         match message {
-            InternalMessage::AppendEntriesRequest { server_id, payload } => {
+            InternalMessage::AppendEntries { server_id, payload } => {
                 if *server_id == consensus_obj.server_id {
                     let (leader_id, success) = consensus_obj.handle_append_entries_request(payload);
                     consensus_obj.respond_to_leader(leader_id, success);

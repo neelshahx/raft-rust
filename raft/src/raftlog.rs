@@ -33,7 +33,7 @@ impl RaftLog {
         &mut self,
         prev_index: usize,
         prev_term: usize,
-        entries: Vec<RaftLogEntry>,
+        entries: &[RaftLogEntry],
     ) -> bool {
         if prev_index >= self.entries.len() {
             return false;
@@ -43,9 +43,7 @@ impl RaftLog {
         }
         let slice = &self.entries[prev_index + 1..];
         if slice.is_empty() {
-            for entry in entries {
-                self.entries.push(entry)
-            }
+            self.entries.extend_from_slice(entries);
             return true;
         }
         let mut n: usize = 0;
@@ -57,7 +55,7 @@ impl RaftLog {
                 break;
             }
         }
-        self.entries.extend(entries.into_iter().skip(n));
+        self.entries.extend_from_slice(&entries[n..]);
         true
     }
 }
@@ -90,7 +88,7 @@ mod tests {
             RaftLogEntry::new(2, "set name bob".to_string()),
         ];
 
-        log.append_entries(1, 1, entries);
+        log.append_entries(1, 1, &entries);
         assert_eq!(log.entries.len(), 4);
         assert_eq!(log.entries[1].command, "set name alice");
         assert_eq!(log.entries[2].command, "delete name");
@@ -102,7 +100,7 @@ mod tests {
         let mut log = RaftLog::new();
         log.add_new_command(1, "set name alice".to_string());
         let entries = vec![RaftLogEntry::new(2, "delete name".to_string())];
-        assert_eq!(log.append_entries(2, 1, entries), false);
+        assert_eq!(log.append_entries(2, 1, &entries), false);
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[1].command, "set name alice");
     }
@@ -112,7 +110,7 @@ mod tests {
         let mut log = RaftLog::new();
         log.add_new_command(1, "set name alice".to_string());
         let entries = vec![RaftLogEntry::new(2, "delete name".to_string())];
-        assert_eq!(log.append_entries(1, 2, entries), false);
+        assert_eq!(log.append_entries(1, 2, &entries), false);
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[1].command, "set name alice");
     }
@@ -125,7 +123,7 @@ mod tests {
             RaftLogEntry::new(1, "set x 1".to_string()),
             RaftLogEntry::new(1, "set y 2".to_string()),
         ];
-        assert!(log.append_entries(0, 0, entries));
+        assert!(log.append_entries(0, 0, &entries));
         assert_eq!(log.entries.len(), 3);
         assert_eq!(log.entries[1].command, "set x 1");
         assert_eq!(log.entries[2].command, "set y 2");
@@ -137,7 +135,7 @@ mod tests {
         let mut log = RaftLog::new();
         log.add_new_command(1, "set name alice".to_string());
         let entries: Vec<RaftLogEntry> = vec![];
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[1].command, "set name alice");
     }
@@ -156,7 +154,7 @@ mod tests {
             RaftLogEntry::new(3, "set b 20".to_string()),
         ];
 
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 4);
         assert_eq!(log.entries[2].term, 3);
         assert_eq!(log.entries[2].command, "set a 10");
@@ -176,7 +174,7 @@ mod tests {
             RaftLogEntry::new(2, "cmd4".to_string()), // new
         ];
 
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 5);
         assert_eq!(log.entries[2].command, "cmd2");
         assert_eq!(log.entries[3].command, "cmd3");
@@ -206,12 +204,12 @@ mod tests {
 
         // First append (assume RPC sends prev index = 0, prev term = 0)
         let entries1 = vec![RaftLogEntry::new(1, "cmd1".to_string())];
-        assert!(log.append_entries(0, 0, entries1));
+        assert!(log.append_entries(0, 0, &entries1));
         assert_eq!(log.entries.len(), 2);
 
         // Second append
         let entries2 = vec![RaftLogEntry::new(1, "cmd2".to_string())];
-        assert!(log.append_entries(1, 1, entries2));
+        assert!(log.append_entries(1, 1, &entries2));
         assert_eq!(log.entries.len(), 3);
 
         // Third append
@@ -219,7 +217,7 @@ mod tests {
             RaftLogEntry::new(2, "cmd3".to_string()),
             RaftLogEntry::new(2, "cmd4".to_string()),
         ];
-        assert!(log.append_entries(2, 1, entries3));
+        assert!(log.append_entries(2, 1, &entries3));
         assert_eq!(log.entries.len(), 5);
     }
 
@@ -235,7 +233,7 @@ mod tests {
         ];
 
         // First append
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 4);
 
         let entries = vec![
@@ -244,7 +242,7 @@ mod tests {
         ];
 
         // Appending the same entries again should be idempotent
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 4);
         assert_eq!(log.entries[2].command, "cmd2");
         assert_eq!(log.entries[3].command, "cmd3");
@@ -258,7 +256,7 @@ mod tests {
 
         // Try to append at index 3 when log only has index 1
         let entries = vec![RaftLogEntry::new(2, "cmd2".to_string())];
-        assert!(!log.append_entries(3, 2, entries));
+        assert!(!log.append_entries(3, 2, &entries));
         assert_eq!(log.entries.len(), 2); // Log unchanged
     }
 
@@ -276,7 +274,7 @@ mod tests {
             RaftLogEntry::new(3, "cmd4".to_string()), // new command
         ];
 
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 4);
         assert_eq!(log.entries[2].term, 3);
         assert_eq!(log.entries[3].term, 3);
@@ -296,7 +294,7 @@ mod tests {
             RaftLogEntry::new(2, "cmd5".to_string()), // extends
         ];
 
-        assert!(log.append_entries(1, 1, entries));
+        assert!(log.append_entries(1, 1, &entries));
         assert_eq!(log.entries.len(), 6);
         assert_eq!(log.entries[5].command, "cmd5");
     }
@@ -306,7 +304,7 @@ mod tests {
         // Test that prev_index=0, prev_term=0 works correctly
         let mut log = RaftLog::new();
         let entries = vec![RaftLogEntry::new(1, "first".to_string())];
-        assert!(log.append_entries(0, 0, entries));
+        assert!(log.append_entries(0, 0, &entries));
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[1].command, "first");
     }

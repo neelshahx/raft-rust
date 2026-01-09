@@ -1,4 +1,5 @@
-use crate::shared::{InternalMessage, RAFT_SERVERS};
+use crate::log;
+use crate::shared::{InternalMessage, RaftNetMessage, RAFT_SERVERS};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -20,40 +21,41 @@ impl RaftNet {
 
     pub fn listen(&self, tx: Sender<InternalMessage>) {
         let ip_port = RAFT_SERVERS[self.server_id].1;
-        println!("Raft server listening on {}", ip_port);
+        log!("Raft server listening on {}", ip_port);
         let listener = TcpListener::bind(ip_port).expect("bind failed");
 
         for stream in listener.incoming() {
             let stream = stream.expect("connection failed");
             let _ = stream.set_nodelay(true);
             let tx = tx.clone();
-            std::thread::spawn(move || Self::handle_raftserver(stream, tx));
+            std::thread::spawn(move || Self::forward(stream, tx));
         }
     }
 
-    pub fn send(&self, dest: usize, msg: &str) -> std::io::Result<()> {
+    pub fn send(&self, server_id: usize, message: &RaftNetMessage) -> std::io::Result<()> {
         let mut streams = self.streams.lock().unwrap();
-        if let Some(stream) = streams.get_mut(&dest) {
-            stream.write_all(msg.as_bytes())?;
+        let payload = serde_json::to_string(&message).unwrap();
+        if let Some(stream) = streams.get_mut(&server_id) {
+            stream.write_all(payload.as_bytes())?;
         } else {
-            let ip_port = RAFT_SERVERS[dest].1;
+            let ip_port = RAFT_SERVERS[server_id].1;
             let mut stream = TcpStream::connect(ip_port)?;
             stream.set_nodelay(true)?;
-            stream.write_all(msg.as_bytes())?;
-            streams.insert(dest, stream);
+            stream.write_all(payload.as_bytes())?;
+            streams.insert(server_id, stream);
         }
         Ok(())
     }
 
-    fn handle_raftserver(mut stream: TcpStream, tx: Sender<InternalMessage>) {
+    fn forward(mut stream: TcpStream, tx: Sender<InternalMessage>) {
         loop {
             let mut buf = [0u8; 1024];
-            let n = match stream.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => n,
-            };
-            let message = String::from_utf8_lossy(&buf[..n]).to_string();
-            let _ = tx.send(InternalMessage::RaftNet(message));
+            let n = stream.read(&mut buf).unwrap();
+            if n > 0 {
+                let message_str = std::str::from_utf8(&buf[..n]).unwrap();
+                let message: RaftNetMessage = serde_json::from_str(message_str).unwrap();
+                let _ = tx.send(InternalMessage::IncomingRaftMessage(message));
+            }
         }
     }
 }

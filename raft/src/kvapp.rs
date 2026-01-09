@@ -2,7 +2,7 @@ use crate::kvstore::KVStore;
 
 pub struct KVApp {
     store: KVStore,
-    last_applied: usize,
+    pub last_applied: usize,
 }
 
 impl KVApp {
@@ -13,8 +13,11 @@ impl KVApp {
         }
     }
 
-    pub fn apply_command() {
-        todo!();
+    pub fn apply_command(&mut self, command: String) {
+        let result = self.update_store(command);
+        // if result == 'Ok'
+        // if result == 'NotOk'
+        // send success/fail over internal pipe back to client
     }
 
     pub fn update_store(&mut self, input: String) -> std::io::Result<String> {

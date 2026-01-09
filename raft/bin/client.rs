@@ -1,13 +1,12 @@
+use raft::log;
 use raft::shared::APP_SERVERS;
-use std::env;
-use std::error::Error;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_id = parse_server_id()?;
     let ip_port = APP_SERVERS[usize::from(server_id)].1;
-    println!("Client connected to app server on {}", ip_port);
+    log!("Client connected to app server on {}", ip_port);
     let mut stream_in = TcpStream::connect(ip_port)?;
     stream_in.set_nodelay(true)?;
 
@@ -27,21 +26,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         let n = stream_in.read(&mut buf)?;
         if n > 0 {
             let reply = String::from_utf8_lossy(&buf[..n]);
-            match reply.split_once(' ') {
-                Some((message_type, message)) => {
-                    match message_type {
-                        "invalid" => panic!("{}", message),
-                        _ => println!("{}", reply),
-                    }
-                }
-                _ => println!("{}", reply),
-            }
+            println!("{}", reply);
         }
     }
 }
 
-fn parse_server_id() -> Result<usize, Box<dyn Error>> {
-    let id: usize = env::args()
+fn parse_server_id() -> Result<usize, Box<dyn std::error::Error>> {
+    let id: usize = std::env::args()
         .nth(1)
         .ok_or("Missing argument server number [1-5]")?
         .parse()?;
