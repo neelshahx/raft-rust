@@ -70,7 +70,8 @@ impl RaftServer {
                         consensus.handle_append_entries_response(message);
                     }
                     Some(("append_entries_request", message)) => {
-                        consensus.handle_append_entries_request(message);
+                        let (leader_id, success) = consensus.handle_append_entries_request(message);
+                        consensus.respond_to_leader(leader_id, success);
                     }
                     _ => {
                         eprintln!("illegal state in raft_net {}", command)
