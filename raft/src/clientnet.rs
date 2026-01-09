@@ -1,4 +1,4 @@
-use crate::shared::{Source, APP_SERVERS};
+use crate::shared::{InternalMessage, APP_SERVERS};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -18,7 +18,7 @@ impl ClientNet {
         }
     }
 
-    pub fn listen(&self, tx: Sender<(Source, String)>) {
+    pub fn listen(&self, tx: Sender<InternalMessage>) {
         let ip_port = APP_SERVERS[self.server_id].1;
         println!("App server listening on {}", ip_port);
         let listener = TcpListener::bind(ip_port).expect("bind failed");
@@ -46,7 +46,7 @@ impl ClientNet {
     fn handle_client(
         mut stream: TcpStream,
         addr: String,
-        tx: Sender<(Source, String)>,
+        tx: Sender<InternalMessage>,
         streams: Arc<Mutex<HashMap<String, TcpStream>>>,
     ) {
         streams
@@ -59,12 +59,11 @@ impl ClientNet {
             if n == 0 {
                 break;
             }
-            let client_cmd = String::from_utf8_lossy(&buf[..n]);
-            tx.send((
-                Source::ClientNet,
-                format!("{} {}", addr, client_cmd.to_string()),
-            ))
-            .unwrap();
+            let command = String::from_utf8_lossy(&buf[..n]);
+            let _ = tx.send(InternalMessage::ClientCommand {
+                addr: addr.clone(),
+                payload: command.to_string(),
+            });
         }
         streams.lock().unwrap().remove(&addr);
     }

@@ -1,4 +1,4 @@
-use crate::shared::{Source, RAFT_SERVERS};
+use crate::shared::{InternalMessage, RAFT_SERVERS};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -18,7 +18,7 @@ impl RaftNet {
         }
     }
 
-    pub fn listen(&self, tx: Sender<(Source, String)>) {
+    pub fn listen(&self, tx: Sender<InternalMessage>) {
         let ip_port = RAFT_SERVERS[self.server_id].1;
         println!("Raft server listening on {}", ip_port);
         let listener = TcpListener::bind(ip_port).expect("bind failed");
@@ -45,7 +45,7 @@ impl RaftNet {
         Ok(())
     }
 
-    fn handle_raftserver(mut stream: TcpStream, tx: Sender<(Source, String)>) {
+    fn handle_raftserver(mut stream: TcpStream, tx: Sender<InternalMessage>) {
         loop {
             let mut buf = [0u8; 1024];
             let n = match stream.read(&mut buf) {
@@ -53,7 +53,7 @@ impl RaftNet {
                 Ok(n) => n,
             };
             let message = String::from_utf8_lossy(&buf[..n]).to_string();
-            let _ = tx.send((Source::RaftNet, message));
+            let _ = tx.send(InternalMessage::RaftNet(message));
         }
     }
 }

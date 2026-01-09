@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+pub const DEBUG: bool = true;
+
+#[macro_export]
+macro_rules! log {
+      ($($arg:tt)*) => {
+          if $crate::shared::DEBUG {
+              eprintln!($($arg)*);
+          }
+      }
+  }
+
 pub const APP_SERVERS: [(u8, &str); 6] = [
     (0, "0.0.0.0:0"),
     (1, "127.0.0.1:21000"),
@@ -18,43 +29,13 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
     (5, "127.0.0.1:15000"),
 ];
 
-pub enum Source {
-    Console,
-    ClientNet,
-    RaftNet,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum MessageType {
-    NewClientCommand,
-    NewConsoleCommand,
-    AppendEntriesRequest,
-    AppendEntriesResponse,
-    Heartbeat,
-    ResponseToClient,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Agent {
-    Client,
-    ConsensusModule,
-    RaftServer,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ChannelType {
-    Thread,
-    Network,
-    Poll,
-}
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Message {
-    pub message_type: MessageType,
-    pub channel: ChannelType,
-    pub from: Agent,
-    pub to: Agent,
-    pub from_addr: String,
-    pub to_addr: String,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum InternalMessage {
+    ClientCommand { addr: String, payload: String },
+    ConsoleCommand(String),
+    RaftNet(String),
+    AppendEntriesRequest { server_id: usize, payload: String },
+    AppendEntriesResponse { server_id: usize, payload: String },
 }
 
 #[derive(Debug, PartialEq)]

@@ -1,14 +1,17 @@
+use crate::log;
 use crate::raftlog::{RaftLog, RaftLogEntry};
-use crate::shared::{asc_sort_median, Role};
+use crate::shared::{asc_sort_median, InternalMessage, Role};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::io::Write;
+use std::sync::mpsc::Sender;
 
 pub struct RaftConsensus {
     pub server_id: usize,
     pub num_servers: usize,
     pub role: Role,
-    pub outbox: Vec<String>,
+    pub tx: Option<Sender<InternalMessage>>,
+    pub outbox: Vec<InternalMessage>,
     current_term: usize,
     log: RaftLog,
     commit_index: usize,
@@ -23,6 +26,7 @@ impl RaftConsensus {
             server_id,
             num_servers,
             role,
+            tx: None,
             outbox: vec![],
             current_term: 1,
             log: RaftLog::new(),
@@ -64,12 +68,10 @@ impl RaftConsensus {
                 entries: self.log.entries[next_index..next_index + 1].to_vec(),
             }
         };
-        self.send(format!(
-            "{} {} {}",
-            follower_id,
-            "append_entries_request",
-            serde_json::to_string(&message).unwrap()
-        ));
+        self.send(InternalMessage::AppendEntriesRequest {
+            server_id: follower_id,
+            payload: serde_json::to_string(&message).unwrap(),
+        });
     }
 
     pub fn handle_append_entries_response(&mut self, message: &str) {
@@ -118,18 +120,24 @@ impl RaftConsensus {
             term: self.current_term,
             success,
         };
-        self.send(format!(
-            "{} {} {}",
-            leader_id,
-            "append_entries_response",
-            serde_json::to_string(&message).unwrap()
-        ));
+        self.send(InternalMessage::AppendEntriesResponse {
+            server_id: leader_id,
+            payload: serde_json::to_string(&message).unwrap(),
+        });
     }
 
     // SHARED FUNCTIONS
 
-    pub fn send(&mut self, message: String) {
-        self.outbox.push(message);
+    pub fn set_sender(&mut self, tx: Sender<InternalMessage>) {
+        self.tx = Some(tx);
+    }
+
+    pub fn send(&mut self, message: InternalMessage) {
+        log!("Sending: {:?}", message);
+        self.outbox.push(message.clone());
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(message);
+        }
     }
 
     pub fn accept(&self) {
@@ -140,10 +148,6 @@ impl RaftConsensus {
         println!("\nserver_id: {}", self.server_id);
         println!("num_servers: {}", self.num_servers);
         println!("role: {:?}", self.role);
-        println!("outbound:");
-        for msg in &self.outbox {
-            println!("  {}", msg);
-        }
         println!("current_term: {}", self.current_term);
         println!("commit_index: {}", self.commit_index);
         println!("last_applied: {}", self.last_applied);
@@ -180,31 +184,26 @@ pub struct AppendEntriesResponse {
 mod tests {
     use super::*;
 
-    fn handle_message(message: &str, consensus_obj: &mut RaftConsensus) {
-        match message.splitn(3, ' ').collect::<Vec<_>>().as_slice() {
-            [server_id, message_type, message] => match *message_type {
-                "append_entries_request" => {
-                    let follower_id: usize = server_id.parse().unwrap();
-                    if follower_id == consensus_obj.server_id {
-                        let (leader_id, success) =
-                            consensus_obj.handle_append_entries_request(message);
-                        consensus_obj.respond_to_leader(leader_id, success);
-                    }
+    fn handle_message(message: &InternalMessage, consensus_obj: &mut RaftConsensus) {
+        match message {
+            InternalMessage::AppendEntriesRequest { server_id, payload } => {
+                if *server_id == consensus_obj.server_id {
+                    let (leader_id, success) = consensus_obj.handle_append_entries_request(payload);
+                    consensus_obj.respond_to_leader(leader_id, success);
                 }
-                "append_entries_response" => {
-                    let leader_id: usize = server_id.parse().unwrap();
-                    if leader_id == consensus_obj.server_id {
-                        consensus_obj.handle_append_entries_response(message);
-                    }
+            }
+            InternalMessage::AppendEntriesResponse { server_id, payload } => {
+                if *server_id == consensus_obj.server_id {
+                    consensus_obj.handle_append_entries_response(payload);
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
     }
 
     fn two_server_request_response(leader: &mut RaftConsensus, follower: &mut RaftConsensus) {
         leader.update_follower(2);
+
         let messages = std::mem::take(&mut leader.outbox);
         for message in &messages {
             handle_message(message, follower);
