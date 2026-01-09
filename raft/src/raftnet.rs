@@ -39,19 +39,21 @@ impl RaftNet {
         let result = if let Some(stream) = streams.get_mut(&server_id) {
             stream.write_all(payload.as_bytes())
         } else {
-            Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "no connection"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "no connection",
+            ))
         };
 
         if result.is_err() {
             streams.remove(&server_id);
             let ip_port = RAFT_SERVERS[server_id].1;
-            let retry_result = TcpStream::connect(ip_port)
-                .and_then(|mut stream| {
-                    stream.set_nodelay(true)?;
-                    stream.write_all(payload.as_bytes())?;
-                    streams.insert(server_id, stream);
-                    Ok(())
-                });
+            let retry_result = TcpStream::connect(ip_port).and_then(|mut stream| {
+                stream.set_nodelay(true)?;
+                stream.write_all(payload.as_bytes())?;
+                streams.insert(server_id, stream);
+                Ok(())
+            });
 
             if let Err(e) = retry_result {
                 eprintln!("Failed to send to server {}: {}", server_id, e);

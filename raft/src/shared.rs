@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::raftconsensus::{AppendEntries, AppendEntriesResponse};
 use crate::raftserver::{RequestVote, RequestVoteResponse};
+use serde::{Deserialize, Serialize};
 
 pub const DEBUG: bool = true;
 
@@ -33,13 +33,22 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum InternalMessage {
-    ClientCommand { addr: String, command: String },
+    ClientCommand {
+        addr: String,
+        command: String,
+    },
     ConsoleCommand(String),
     IncomingRaftMessage(RaftNetMessage),
-    AppendEntries { server_id: usize, payload: AppendEntries },
-    AppendEntriesResponse { server_id: usize, payload: AppendEntriesResponse },
+    AppendEntries {
+        server_id: usize,
+        payload: AppendEntries,
+    },
+    AppendEntriesResponse {
+        server_id: usize,
+        payload: AppendEntriesResponse,
+    },
     StartElection,
-    Tick
+    Tick,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -50,12 +59,11 @@ pub enum RaftNetMessage {
     AppendEntriesResponse(AppendEntriesResponse),
 }
 
-
 #[derive(Debug, PartialEq)]
 pub enum Role {
     Leader,
     Follower,
-    Candidate
+    Candidate,
 }
 
 pub fn asc_sort_median(match_index: Vec<usize>) -> usize {
