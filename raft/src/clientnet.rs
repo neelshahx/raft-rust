@@ -61,7 +61,7 @@ impl ClientNet {
             }
             let client_cmd = String::from_utf8_lossy(&buf[..n]);
             tx.send((
-                Source::CLIENT,
+                Source::ClientNet,
                 format!("{} {}", addr, client_cmd.to_string()),
             ))
             .unwrap();

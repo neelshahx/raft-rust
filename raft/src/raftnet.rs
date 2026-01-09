@@ -53,7 +53,7 @@ impl RaftNet {
                 Ok(n) => n,
             };
             let message = String::from_utf8_lossy(&buf[..n]).to_string();
-            let _ = tx.send((Source::INTERNAL, message));
+            let _ = tx.send((Source::RaftNet, message));
         }
     }
 }

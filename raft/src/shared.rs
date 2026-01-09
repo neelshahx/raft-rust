@@ -1,7 +1,3 @@
-use std::error::Error;
-use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
-
 pub const APP_SERVERS: [(u8, &str); 6] = [
     (0, "0.0.0.0:0"),
     (1, "127.0.0.1:21000"),
@@ -21,15 +17,15 @@ pub const RAFT_SERVERS: [(u8, &str); 6] = [
 ];
 
 pub enum Source {
-    CONSOLE,
-    CLIENT,
-    INTERNAL,
+    Console,
+    ClientNet,
+    RaftNet,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Role {
-    LEADER,
-    FOLLOWER,
+    Leader,
+    Follower,
 }
 
 pub fn asc_sort_median(match_index: Vec<usize>) -> usize {

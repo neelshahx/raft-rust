@@ -35,13 +35,13 @@ impl RaftConsensus {
 
     // LEADER FUNCTIONS
     pub fn new_client_command(&mut self, command: String) {
-        assert_eq!(self.role, Role::LEADER);
+        assert_eq!(self.role, Role::Leader);
         self.log.add_new_command(self.current_term, command);
         self.match_index[self.server_id] += 1;
     }
 
     pub fn update_follower(&mut self, follower_id: usize) {
-        assert_eq!(self.role, Role::LEADER);
+        assert_eq!(self.role, Role::Leader);
         assert_ne!(self.server_id, follower_id);
         let next_index = self.next_index[follower_id];
         assert!(next_index > 0, "next_index should never be less than 1");
@@ -65,8 +65,9 @@ impl RaftConsensus {
             }
         };
         self.send(format!(
-            "{} {}",
+            "{} {} {}",
             follower_id,
+            "append_entries_request",
             serde_json::to_string(&message).unwrap()
         ));
     }
@@ -87,7 +88,7 @@ impl RaftConsensus {
 
     // FOLLOWER FUNCTIONS
     pub fn handle_append_entries_request(&mut self, message: &str) -> (usize, bool) {
-        assert_eq!(self.role, Role::FOLLOWER);
+        assert_eq!(self.role, Role::Follower);
         let message: AppendEntriesRequest = serde_json::from_str(message).unwrap();
         if message.term < self.current_term {
             return (message.leader_id, false);
@@ -104,7 +105,7 @@ impl RaftConsensus {
     }
 
     pub fn respond_to_leader(&mut self, leader_id: usize, success: bool) {
-        assert_eq!(self.role, Role::FOLLOWER);
+        assert_eq!(self.role, Role::Follower);
         let message = AppendEntriesResponse {
             follower_id: self.server_id,
             match_index: self.log.entries.len() - 1,
@@ -112,8 +113,9 @@ impl RaftConsensus {
             success,
         };
         self.send(format!(
-            "{} {}",
+            "{} {} {}",
             leader_id,
+            "append_entries_response",
             serde_json::to_string(&message).unwrap()
         ));
     }
@@ -204,8 +206,8 @@ mod tests {
 
     #[test]
     fn test_single_replication() {
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         leader.new_client_command("set name alice".to_string());
 
         two_server_request_response(&mut leader, &mut follower);
@@ -217,12 +219,12 @@ mod tests {
 
     #[test]
     fn test_multiple_replication() {
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("set name alice".to_string());
         leader.new_client_command("get name".to_string());
         leader.new_client_command("set name bob".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
 
         for _ in 0..3 {
             two_server_request_response(&mut leader, &mut follower);
@@ -235,14 +237,14 @@ mod tests {
     #[test]
     fn test_follower_behind_needs_multiple_rounds() {
         // Leader has 5 entries, follower has none - should take 5 rounds to sync
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
         leader.new_client_command("cmd3".to_string());
         leader.new_client_command("cmd4".to_string());
         leader.new_client_command("cmd5".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
 
         // Replicate all entries
         for _ in 0..5 {
@@ -262,11 +264,11 @@ mod tests {
     fn test_leader_behind_follower() {
         // Scenario: Follower has more entries than leader (illegal state under persistent storage)
         // This tests what happens when leader's next_index is wrong
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         // Manually add more entries to follower (simulating it being ahead)
         follower.log.add_new_command(1, "cmd1".to_string());
         follower.log.add_new_command(1, "cmd2".to_string());
@@ -286,12 +288,12 @@ mod tests {
     #[test]
     fn test_log_divergence_at_index() {
         // Leader and follower have different entries at same index (different terms)
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
         leader.new_client_command("cmd3_leader".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         follower.log.add_new_command(1, "cmd1".to_string());
         follower.log.add_new_command(1, "cmd2".to_string());
         // Follower has different command at index 3 with different term
@@ -311,12 +313,12 @@ mod tests {
     #[test]
     fn test_large_gap_backtracking() {
         // Follower is very far behind with only 1 entry, leader has 10
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         for i in 1..=10 {
             leader.new_client_command(format!("cmd{}", i));
         }
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         follower.log.add_new_command(1, "cmd1".to_string());
 
         // Set leader's next_index to wrong value (thinks follower has more)
@@ -336,14 +338,14 @@ mod tests {
     #[test]
     fn test_partial_overlap_different_terms() {
         // Leader and follower share some entries but diverge
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.log.add_new_command(1, "cmd1".to_string());
         leader.log.add_new_command(1, "cmd2".to_string());
         leader.log.add_new_command(3, "cmd3".to_string());
         leader.log.add_new_command(3, "cmd4".to_string());
         leader.current_term = 3;
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         follower.log.add_new_command(1, "cmd1".to_string());
         follower.log.add_new_command(1, "cmd2".to_string());
         // Follower has different entries from index 3 onwards
@@ -366,12 +368,12 @@ mod tests {
     #[test]
     fn test_empty_follower_catchup() {
         // Follower has only dummy entry, leader has several
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
         leader.new_client_command("cmd3".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         // Follower has only the dummy entry at index 0
 
         for _ in 0..3 {
@@ -387,12 +389,12 @@ mod tests {
     #[test]
     fn test_indices_after_failed_then_success() {
         // Test that match_index and next_index are correctly updated after failures
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
         leader.new_client_command("cmd3".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         // Follower only has cmd1
         follower.log.add_new_command(1, "cmd1".to_string());
 
@@ -419,12 +421,12 @@ mod tests {
     #[test]
     fn test_term_consistency_after_replication() {
         // Verify that terms are correctly replicated
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.current_term = 3;
         leader.new_client_command("cmd1".to_string());
         leader.new_client_command("cmd2".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         follower.current_term = 3;
 
         for _ in 0..2 {
@@ -441,7 +443,7 @@ mod tests {
     #[test]
     fn test_match_index_starts_at_zero() {
         // Verify initial state of match_index
-        let leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let leader = RaftConsensus::new(1, 2, Role::Leader);
         assert_eq!(leader.match_index[2], 0);
         assert_eq!(leader.next_index[2], 1);
     }
@@ -449,10 +451,10 @@ mod tests {
     #[test]
     fn test_next_index_never_below_one() {
         // Verify that next_index doesn't go below 1 during backtracking
-        let mut leader = RaftConsensus::new(1, 2, Role::LEADER);
+        let mut leader = RaftConsensus::new(1, 2, Role::Leader);
         leader.new_client_command("cmd1".to_string());
 
-        let mut follower = RaftConsensus::new(2, 2, Role::FOLLOWER);
+        let mut follower = RaftConsensus::new(2, 2, Role::Follower);
         // Follower has completely different log
         follower.log.add_new_command(2, "different".to_string());
 

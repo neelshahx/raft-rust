@@ -18,7 +18,7 @@ impl RaftConsole {
 
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).ok();
-            tx.send((Source::CONSOLE, input.trim().to_string())).ok();
+            tx.send((Source::Console, input.trim().to_string())).ok();
         }
     }
 }

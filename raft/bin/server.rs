@@ -4,7 +4,7 @@ use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (my_server_id, num_servers) = parse_args()?;
-    let raft_server = RaftServer::new(my_server_id, num_servers, my_server_id == 1).launch();
+    let _ = RaftServer::new(my_server_id, num_servers, my_server_id == 1).run();
     Ok(())
 }
 
