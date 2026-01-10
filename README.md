@@ -15,6 +15,18 @@ Not implemented
 - log persistence and compaction
 - ...
 
+
+### Techniques
+
+- multiple producer single queue (mpsc) and event routing
+- interrupts and timers
+- networking (TCP listeners and streams, connection caching, retries)
+- serialisation/deserialisation
+- concurrency (threads, reference counters, atomics, mutexes)
+- designing functional core/imperative shell
+- testing distributed systems
+
+### How to use
 To compile
 ```cargo
 cargo build
